@@ -1,0 +1,11 @@
+-- +goose Up
+ALTER TABLE tenants
+  ADD COLUMN IF NOT EXISTS website TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS branding JSONB NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS billing_email JSONB NOT NULL DEFAULT '{}';
+
+-- +goose Down
+ALTER TABLE tenants
+  DROP COLUMN IF EXISTS website,
+  DROP COLUMN IF EXISTS branding,
+  DROP COLUMN IF EXISTS billing_email;
