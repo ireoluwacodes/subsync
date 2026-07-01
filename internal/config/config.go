@@ -62,10 +62,6 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("JWT_REFRESH_TTL: %w", err)
 	}
 
-	if cfg.NombaCredentialsEncryptionKey == "" && cfg.AppEnv != "development" {
-		// Dev may use a default key in tests only.
-	}
-
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}

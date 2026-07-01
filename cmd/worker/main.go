@@ -35,7 +35,11 @@ func main() {
 		log.Error("failed to connect to redis", zap.Error(err))
 		os.Exit(1)
 	}
-	defer q.Close()
+	defer func() {
+		if err := q.Close(); err != nil {
+			log.Error("failed to close redis", zap.Error(err))
+		}
+	}()
 
 	server, err := q.NewServer(cfg.RedisURL, 10)
 	if err != nil {

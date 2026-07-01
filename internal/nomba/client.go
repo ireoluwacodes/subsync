@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -161,7 +160,7 @@ func (c *Client) roundTrip(ctx context.Context, baseURL, accountID, method, path
 	if err != nil {
 		return fmt.Errorf("nomba request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -186,15 +185,6 @@ func (c *Client) roundTrip(ctx context.Context, baseURL, accountID, method, path
 		}
 	}
 	return NewHTTPError(resp.StatusCode, apiErr)
-}
-
-func parseRetryAfterHeader(h http.Header) time.Duration {
-	if v := h.Get("Retry-After"); v != "" {
-		if secs, err := strconv.Atoi(v); err == nil {
-			return time.Duration(secs) * time.Second
-		}
-	}
-	return 1 * time.Second
 }
 
 func doData[T any](c *Client, ctx context.Context, tenant *domain.Tenant, method, path string, body any) (T, error) {
