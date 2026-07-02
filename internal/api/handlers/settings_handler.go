@@ -14,18 +14,7 @@ func NewSettingsHandler(svc *service.SettingsService) *SettingsHandler {
 	return &SettingsHandler{svc: svc}
 }
 
-func (h *SettingsHandler) Register(rg *gin.RouterGroup) {
-	rg.GET("/settings", h.get)
-	rg.PATCH("/settings/general", h.updateGeneral)
-	rg.PATCH("/settings/dunning", h.updateDunning)
-	rg.PATCH("/settings/branding", h.updateBranding)
-	rg.PATCH("/settings/billing-email", h.updateBillingEmail)
-	rg.GET("/settings/nomba", h.getNomba)
-	rg.PATCH("/settings/nomba", h.updateNomba)
-	rg.POST("/settings/api-key/rotate", h.rotateAPIKey)
-}
-
-func (h *SettingsHandler) get(c *gin.Context) {
+func (h *SettingsHandler) Get(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -38,7 +27,7 @@ func (h *SettingsHandler) get(c *gin.Context) {
 	dto.RespondOK(c, dto.TenantToResponse(fresh, false))
 }
 
-func (h *SettingsHandler) updateGeneral(c *gin.Context) {
+func (h *SettingsHandler) UpdateGeneral(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -62,7 +51,7 @@ func (h *SettingsHandler) updateGeneral(c *gin.Context) {
 	dto.RespondOK(c, dto.TenantToResponse(updated, false))
 }
 
-func (h *SettingsHandler) updateDunning(c *gin.Context) {
+func (h *SettingsHandler) UpdateDunning(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -82,7 +71,7 @@ func (h *SettingsHandler) updateDunning(c *gin.Context) {
 	dto.RespondOK(c, dto.TenantToResponse(updated, false))
 }
 
-func (h *SettingsHandler) updateBranding(c *gin.Context) {
+func (h *SettingsHandler) UpdateBranding(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -100,7 +89,7 @@ func (h *SettingsHandler) updateBranding(c *gin.Context) {
 	dto.RespondOK(c, dto.TenantToResponse(updated, false))
 }
 
-func (h *SettingsHandler) updateBillingEmail(c *gin.Context) {
+func (h *SettingsHandler) UpdateBillingEmail(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -129,7 +118,7 @@ func nombaSettingsResponse(v *service.NombaSettingsView) dto.NombaSettingsRespon
 	}
 }
 
-func (h *SettingsHandler) getNomba(c *gin.Context) {
+func (h *SettingsHandler) GetNomba(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -142,7 +131,7 @@ func (h *SettingsHandler) getNomba(c *gin.Context) {
 	dto.RespondOK(c, nombaSettingsResponse(view))
 }
 
-func (h *SettingsHandler) updateNomba(c *gin.Context) {
+func (h *SettingsHandler) UpdateNomba(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -160,7 +149,7 @@ func (h *SettingsHandler) updateNomba(c *gin.Context) {
 	dto.RespondOK(c, nombaSettingsResponse(updated))
 }
 
-func (h *SettingsHandler) rotateAPIKey(c *gin.Context) {
+func (h *SettingsHandler) RotateAPIKey(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return

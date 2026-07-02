@@ -15,14 +15,7 @@ func NewPaymentMethodHandler(svc *service.PaymentMethodService) *PaymentMethodHa
 	return &PaymentMethodHandler{svc: svc}
 }
 
-func (h *PaymentMethodHandler) Register(rg *gin.RouterGroup) {
-	rg.POST("/payment-methods", h.create)
-	rg.GET("/payment-methods/:id", h.get)
-	rg.DELETE("/payment-methods/:id", h.delete)
-	rg.POST("/payment-methods/:id/set-default", h.setDefault)
-}
-
-func (h *PaymentMethodHandler) create(c *gin.Context) {
+func (h *PaymentMethodHandler) Create(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -49,7 +42,7 @@ func (h *PaymentMethodHandler) create(c *gin.Context) {
 	dto.RespondCreated(c, dto.PaymentMethodToResponse(pm))
 }
 
-func (h *PaymentMethodHandler) get(c *gin.Context) {
+func (h *PaymentMethodHandler) Get(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -70,7 +63,7 @@ func (h *PaymentMethodHandler) get(c *gin.Context) {
 	dto.RespondOK(c, dto.PaymentMethodToResponse(pm))
 }
 
-func (h *PaymentMethodHandler) delete(c *gin.Context) {
+func (h *PaymentMethodHandler) Delete(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -90,7 +83,7 @@ func (h *PaymentMethodHandler) delete(c *gin.Context) {
 	c.Status(204)
 }
 
-func (h *PaymentMethodHandler) setDefault(c *gin.Context) {
+func (h *PaymentMethodHandler) SetDefault(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return

@@ -12,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/ireoluwacodes/subsync/internal/api"
 	"github.com/ireoluwacodes/subsync/internal/auth"
 	"github.com/ireoluwacodes/subsync/internal/config"
 	"github.com/ireoluwacodes/subsync/internal/crypto"
@@ -20,6 +19,7 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/logger"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
 	"github.com/ireoluwacodes/subsync/internal/queue"
+	"github.com/ireoluwacodes/subsync/internal/router"
 	"github.com/ireoluwacodes/subsync/internal/service"
 )
 
@@ -69,18 +69,11 @@ func main() {
 	jwtSvc := auth.NewJWTService(cfg)
 	svcs := service.NewServices(repos, cfg, nombaClient, jwtSvc)
 
-	router := api.NewRouter(api.RouterDeps{
-		Config: cfg,
-		DB:     database,
-		Queue:  q,
-		Repos:  repos,
-		Svcs:   svcs,
-		Nomba:  nombaClient,
-	})
+	engine := router.Setup(cfg, database, q, repos, svcs)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.HTTPPort),
-		Handler:      router,
+		Handler:      engine,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

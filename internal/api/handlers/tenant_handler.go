@@ -19,15 +19,7 @@ func NewTenantHandler(svc *service.TenantService, cfg *config.Config) *TenantHan
 	return &TenantHandler{svc: svc, cfg: cfg}
 }
 
-func (h *TenantHandler) RegisterPublic(r *gin.Engine) {
-	r.POST("/v1/tenants", h.create)
-}
-
-func (h *TenantHandler) RegisterAuthenticated(rg *gin.RouterGroup) {
-	rg.GET("/me", h.me)
-}
-
-func (h *TenantHandler) create(c *gin.Context) {
+func (h *TenantHandler) Create(c *gin.Context) {
 	if h.cfg.BootstrapSecret == "" || c.GetHeader("X-Bootstrap-Secret") != h.cfg.BootstrapSecret {
 		c.JSON(http.StatusUnauthorized, dto.Envelope{
 			Meta:  dto.Meta{RequestID: c.GetString("request_id")},
@@ -62,7 +54,7 @@ func (h *TenantHandler) create(c *gin.Context) {
 	})
 }
 
-func (h *TenantHandler) me(c *gin.Context) {
+func (h *TenantHandler) Me(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		c.JSON(401, dto.Envelope{

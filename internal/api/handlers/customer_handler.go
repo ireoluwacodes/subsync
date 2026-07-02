@@ -15,14 +15,7 @@ func NewCustomerHandler(svc *service.CustomerService) *CustomerHandler {
 	return &CustomerHandler{svc: svc}
 }
 
-func (h *CustomerHandler) Register(rg *gin.RouterGroup) {
-	rg.POST("/customers", h.create)
-	rg.GET("/customers", h.list)
-	rg.GET("/customers/:id", h.get)
-	rg.PUT("/customers/:id", h.update)
-}
-
-func (h *CustomerHandler) create(c *gin.Context) {
+func (h *CustomerHandler) Create(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -43,7 +36,7 @@ func (h *CustomerHandler) create(c *gin.Context) {
 	dto.RespondCreated(c, dto.CustomerToResponse(customer))
 }
 
-func (h *CustomerHandler) list(c *gin.Context) {
+func (h *CustomerHandler) List(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -71,7 +64,7 @@ func (h *CustomerHandler) list(c *gin.Context) {
 	})
 }
 
-func (h *CustomerHandler) get(c *gin.Context) {
+func (h *CustomerHandler) Get(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -92,7 +85,7 @@ func (h *CustomerHandler) get(c *gin.Context) {
 	dto.RespondOK(c, dto.CustomerToResponse(customer))
 }
 
-func (h *CustomerHandler) update(c *gin.Context) {
+func (h *CustomerHandler) Update(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return

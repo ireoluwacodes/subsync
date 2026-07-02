@@ -6,9 +6,7 @@ type AnalyticsHandler struct{}
 
 func NewAnalyticsHandler() *AnalyticsHandler { return &AnalyticsHandler{} }
 
-func (h *AnalyticsHandler) Register(rg *gin.RouterGroup) {
-	rg.GET("/analytics/mrr", NotImplemented)
-	rg.GET("/analytics/churn", NotImplemented)
-	rg.GET("/analytics/dunning", NotImplemented)
-	rg.GET("/analytics/revenue", NotImplemented)
-}
+func (h *AnalyticsHandler) MRR(c *gin.Context)     { NotImplemented(c) }
+func (h *AnalyticsHandler) Churn(c *gin.Context)   { NotImplemented(c) }
+func (h *AnalyticsHandler) Dunning(c *gin.Context) { NotImplemented(c) }
+func (h *AnalyticsHandler) Revenue(c *gin.Context) { NotImplemented(c) }

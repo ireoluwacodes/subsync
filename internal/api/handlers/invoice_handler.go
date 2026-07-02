@@ -19,15 +19,7 @@ func NewInvoiceHandler(svc *service.InvoiceService) *InvoiceHandler {
 	return &InvoiceHandler{svc: svc}
 }
 
-func (h *InvoiceHandler) Register(rg *gin.RouterGroup) {
-	rg.GET("/invoices", h.list)
-	rg.GET("/invoices/:id", h.get)
-	rg.GET("/invoices/:id/pdf", h.pdf)
-	rg.POST("/invoices/:id/void", h.void)
-	rg.POST("/invoices/:id/retry", h.retry)
-}
-
-func (h *InvoiceHandler) list(c *gin.Context) {
+func (h *InvoiceHandler) List(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -67,7 +59,7 @@ func (h *InvoiceHandler) list(c *gin.Context) {
 	})
 }
 
-func (h *InvoiceHandler) get(c *gin.Context) {
+func (h *InvoiceHandler) Get(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -88,7 +80,7 @@ func (h *InvoiceHandler) get(c *gin.Context) {
 	})
 }
 
-func (h *InvoiceHandler) pdf(c *gin.Context) {
+func (h *InvoiceHandler) PDF(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -106,7 +98,7 @@ func (h *InvoiceHandler) pdf(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", data)
 }
 
-func (h *InvoiceHandler) void(c *gin.Context) {
+func (h *InvoiceHandler) Void(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -124,7 +116,7 @@ func (h *InvoiceHandler) void(c *gin.Context) {
 	dto.RespondOK(c, dto.InvoiceToResponse(inv))
 }
 
-func (h *InvoiceHandler) retry(c *gin.Context) {
+func (h *InvoiceHandler) Retry(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return

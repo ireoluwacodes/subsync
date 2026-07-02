@@ -14,19 +14,6 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 	return &AuthHandler{svc: svc}
 }
 
-func (h *AuthHandler) RegisterPublic(r *gin.Engine) {
-	g := r.Group("/v1/auth")
-	g.POST("/register", h.register)
-	g.POST("/login", h.login)
-	g.POST("/refresh", h.refresh)
-	g.POST("/forgot-password", h.forgotPassword)
-	g.POST("/reset-password", h.resetPassword)
-}
-
-func (h *AuthHandler) RegisterAuthenticated(rg *gin.RouterGroup) {
-	rg.POST("/auth/logout", h.logout)
-}
-
 type registerRequest struct {
 	Email             string `json:"email" binding:"required,email"`
 	Password          string `json:"password" binding:"required,min=8"`
@@ -39,7 +26,7 @@ type registerRequest struct {
 	NombaWebhookSecret string `json:"nomba_webhook_secret"`
 }
 
-func (h *AuthHandler) register(c *gin.Context) {
+func (h *AuthHandler) Register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		dto.RespondError(c, dto.NewBindError("invalid request body"))
@@ -78,7 +65,7 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func (h *AuthHandler) login(c *gin.Context) {
+func (h *AuthHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		dto.RespondError(c, dto.NewBindError("invalid request body"))
@@ -105,7 +92,7 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
-func (h *AuthHandler) refresh(c *gin.Context) {
+func (h *AuthHandler) Refresh(c *gin.Context) {
 	var req refreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		dto.RespondError(c, dto.NewBindError("invalid request body"))
@@ -125,7 +112,7 @@ func (h *AuthHandler) refresh(c *gin.Context) {
 	})
 }
 
-func (h *AuthHandler) logout(c *gin.Context) {
+func (h *AuthHandler) Logout(c *gin.Context) {
 	user, ok := middlewareUser(c)
 	if !ok {
 		return
@@ -141,7 +128,7 @@ type forgotPasswordRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
-func (h *AuthHandler) forgotPassword(c *gin.Context) {
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req forgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		dto.RespondError(c, dto.NewBindError("invalid request body"))
@@ -160,7 +147,7 @@ type resetPasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
-func (h *AuthHandler) resetPassword(c *gin.Context) {
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req resetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		dto.RespondError(c, dto.NewBindError("invalid request body"))

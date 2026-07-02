@@ -19,19 +19,7 @@ func NewSubscriptionHandler(svc *service.SubscriptionService) *SubscriptionHandl
 	return &SubscriptionHandler{svc: svc}
 }
 
-func (h *SubscriptionHandler) Register(rg *gin.RouterGroup) {
-	rg.POST("/subscriptions", h.create)
-	rg.GET("/subscriptions", h.list)
-	rg.GET("/subscriptions/:id", h.get)
-	rg.POST("/subscriptions/:id/cancel", h.cancel)
-	rg.POST("/subscriptions/:id/pause", h.pause)
-	rg.POST("/subscriptions/:id/resume", h.resume)
-	rg.POST("/subscriptions/:id/upgrade", h.upgrade)
-	rg.GET("/subscriptions/:id/upgrade/preview", h.previewUpgrade)
-	rg.GET("/subscriptions/:id/transitions", h.transitions)
-}
-
-func (h *SubscriptionHandler) create(c *gin.Context) {
+func (h *SubscriptionHandler) Create(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -75,7 +63,7 @@ func (h *SubscriptionHandler) create(c *gin.Context) {
 	dto.RespondCreated(c, dto.SubscriptionToResponse(sub))
 }
 
-func (h *SubscriptionHandler) list(c *gin.Context) {
+func (h *SubscriptionHandler) List(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -118,7 +106,7 @@ func (h *SubscriptionHandler) list(c *gin.Context) {
 	})
 }
 
-func (h *SubscriptionHandler) get(c *gin.Context) {
+func (h *SubscriptionHandler) Get(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -136,7 +124,7 @@ func (h *SubscriptionHandler) get(c *gin.Context) {
 	dto.RespondOK(c, dto.SubscriptionToResponse(sub))
 }
 
-func (h *SubscriptionHandler) cancel(c *gin.Context) {
+func (h *SubscriptionHandler) Cancel(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -163,7 +151,7 @@ func (h *SubscriptionHandler) cancel(c *gin.Context) {
 	dto.RespondOK(c, dto.SubscriptionToResponse(sub))
 }
 
-func (h *SubscriptionHandler) pause(c *gin.Context) {
+func (h *SubscriptionHandler) Pause(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -186,7 +174,7 @@ func (h *SubscriptionHandler) pause(c *gin.Context) {
 	dto.RespondOK(c, dto.SubscriptionToResponse(sub))
 }
 
-func (h *SubscriptionHandler) resume(c *gin.Context) {
+func (h *SubscriptionHandler) Resume(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -204,7 +192,7 @@ func (h *SubscriptionHandler) resume(c *gin.Context) {
 	dto.RespondOK(c, dto.SubscriptionToResponse(sub))
 }
 
-func (h *SubscriptionHandler) upgrade(c *gin.Context) {
+func (h *SubscriptionHandler) Upgrade(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -238,7 +226,7 @@ func (h *SubscriptionHandler) upgrade(c *gin.Context) {
 	})
 }
 
-func (h *SubscriptionHandler) previewUpgrade(c *gin.Context) {
+func (h *SubscriptionHandler) PreviewUpgrade(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return
@@ -261,7 +249,7 @@ func (h *SubscriptionHandler) previewUpgrade(c *gin.Context) {
 	dto.RespondOK(c, result)
 }
 
-func (h *SubscriptionHandler) transitions(c *gin.Context) {
+func (h *SubscriptionHandler) Transitions(c *gin.Context) {
 	tenant, ok := middlewareTenant(c)
 	if !ok {
 		return

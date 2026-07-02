@@ -6,10 +6,8 @@ type WebhookHandler struct{}
 
 func NewWebhookHandler() *WebhookHandler { return &WebhookHandler{} }
 
-func (h *WebhookHandler) Register(rg *gin.RouterGroup) {
-	rg.POST("/webhook-endpoints", NotImplemented)
-	rg.GET("/webhook-endpoints", NotImplemented)
-	rg.GET("/webhook-endpoints/:id", NotImplemented)
-	rg.PUT("/webhook-endpoints/:id", NotImplemented)
-	rg.DELETE("/webhook-endpoints/:id", NotImplemented)
-}
+func (h *WebhookHandler) CreateEndpoint(c *gin.Context)  { NotImplemented(c) }
+func (h *WebhookHandler) ListEndpoints(c *gin.Context)   { NotImplemented(c) }
+func (h *WebhookHandler) GetEndpoint(c *gin.Context)     { NotImplemented(c) }
+func (h *WebhookHandler) UpdateEndpoint(c *gin.Context)  { NotImplemented(c) }
+func (h *WebhookHandler) DeleteEndpoint(c *gin.Context)  { NotImplemented(c) }

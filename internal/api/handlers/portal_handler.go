@@ -6,12 +6,7 @@ type PortalHandler struct{}
 
 func NewPortalHandler() *PortalHandler { return &PortalHandler{} }
 
-func (h *PortalHandler) Register(r *gin.Engine) {
-	r.GET("/portal/:token", NotImplemented)
-	r.POST("/portal/:token/cancel", NotImplemented)
-	r.POST("/portal/:token/update-payment-method", NotImplemented)
-}
-
-func (h *PortalHandler) RegisterAPI(rg *gin.RouterGroup) {
-	rg.POST("/portal/token", NotImplemented)
-}
+func (h *PortalHandler) CreateToken(c *gin.Context)          { NotImplemented(c) }
+func (h *PortalHandler) Home(c *gin.Context)                 { NotImplemented(c) }
+func (h *PortalHandler) Cancel(c *gin.Context)               { NotImplemented(c) }
+func (h *PortalHandler) UpdatePaymentMethod(c *gin.Context)  { NotImplemented(c) }

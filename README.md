@@ -120,7 +120,7 @@ See [`.env.example`](.env.example) for all configuration options.
 | `JWT_REFRESH_TTL` | No | Refresh token lifetime (default: 7d) |
 | `BILLING_MOCK_RESULT` | No | `success` or `failure` for mock invoice charges (Phase 2) |
 | `NOMBA_WEBHOOK_SIGNING_KEY` | No | Dev fallback for inbound Nomba webhooks |
-| `BOOTSTRAP_SECRET` | Prod | Protects `POST /v1/tenants` via `X-Bootstrap-Secret` header |
+| `BOOTSTRAP_SECRET` | Prod | Protects `POST /api/v1/tenants` via `X-Bootstrap-Secret` header |
 | `WEBHOOK_SIGNING_SECRET` | Phase 4 | Outbound SubSync webhook signing |
 
 See [nomba-integration.md](nomba-integration.md) for API validation details.
@@ -139,12 +139,12 @@ Each merchant stores their own Nomba OAuth credentials (`client_id`, encrypted `
 
 ## API auth
 
-**Self-serve (dashboard):** `POST /v1/auth/register` then `POST /v1/auth/login` → use `Authorization: Bearer <access_jwt>`.
+**Self-serve (dashboard):** `POST /api/v1/auth/register` then `POST /api/v1/auth/login` → use `Authorization: Bearer <access_jwt>`.
 
-**Ops bootstrap:** `POST /v1/tenants` with `X-Bootstrap-Secret` (returns API key once):
+**Ops bootstrap:** `POST /api/v1/tenants` with `X-Bootstrap-Secret` (returns API key once):
 
 ```bash
-curl -X POST http://localhost:8080/v1/tenants \
+curl -X POST http://localhost:8080/api/v1/tenants \
   -H "Content-Type: application/json" \
   -H "X-Bootstrap-Secret: $BOOTSTRAP_SECRET" \
   -d '{
@@ -157,7 +157,7 @@ curl -X POST http://localhost:8080/v1/tenants \
   }'
 ```
 
-Use the returned `api_key` or JWT as `Authorization: Bearer <token>` for `/v1/*` routes.
+Use the returned `api_key` or JWT as `Authorization: Bearer <token>` for `/api/v1/*` routes.
 
 ## Testing
 

@@ -18,16 +18,7 @@ func NewPlanHandler(svc *service.PlanService, subSvc *service.SubscriptionServic
 	return &PlanHandler{svc: svc, subSvc: subSvc}
 }
 
-func (h *PlanHandler) Register(rg *gin.RouterGroup) {
-	rg.POST("/plans", h.create)
-	rg.GET("/plans", h.list)
-	rg.GET("/plans/:id", h.get)
-	rg.GET("/plans/:id/stats", h.stats)
-	rg.PUT("/plans/:id", h.update)
-	rg.DELETE("/plans/:id", h.archive)
-}
-
-func (h *PlanHandler) create(c *gin.Context) {
+func (h *PlanHandler) Create(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -48,7 +39,7 @@ func (h *PlanHandler) create(c *gin.Context) {
 	dto.RespondCreated(c, dto.PlanToResponse(plan))
 }
 
-func (h *PlanHandler) list(c *gin.Context) {
+func (h *PlanHandler) List(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -86,7 +77,7 @@ func (h *PlanHandler) list(c *gin.Context) {
 	})
 }
 
-func (h *PlanHandler) get(c *gin.Context) {
+func (h *PlanHandler) Get(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -107,7 +98,7 @@ func (h *PlanHandler) get(c *gin.Context) {
 	dto.RespondOK(c, dto.PlanToResponse(plan))
 }
 
-func (h *PlanHandler) stats(c *gin.Context) {
+func (h *PlanHandler) Stats(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -133,7 +124,7 @@ func (h *PlanHandler) stats(c *gin.Context) {
 	})
 }
 
-func (h *PlanHandler) update(c *gin.Context) {
+func (h *PlanHandler) Update(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return
@@ -160,7 +151,7 @@ func (h *PlanHandler) update(c *gin.Context) {
 	dto.RespondOK(c, dto.PlanToResponse(plan))
 }
 
-func (h *PlanHandler) archive(c *gin.Context) {
+func (h *PlanHandler) Archive(c *gin.Context) {
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		return

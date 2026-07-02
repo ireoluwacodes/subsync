@@ -14,13 +14,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"github.com/ireoluwacodes/subsync/internal/api"
 	"github.com/ireoluwacodes/subsync/internal/auth"
 	"github.com/ireoluwacodes/subsync/internal/config"
 	"github.com/ireoluwacodes/subsync/internal/crypto"
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
 	"github.com/ireoluwacodes/subsync/internal/queue"
+	"github.com/ireoluwacodes/subsync/internal/router"
 	"github.com/ireoluwacodes/subsync/internal/service"
 )
 
@@ -75,14 +75,7 @@ func TestPhase2_E2E(t *testing.T) {
 	jwtSvc := auth.NewJWTService(cfg)
 	svcs := service.NewServices(repos, cfg, nombaClient, jwtSvc)
 
-	router := api.NewRouter(api.RouterDeps{
-		Config: cfg,
-		DB:     database,
-		Queue:  q,
-		Repos:  repos,
-		Svcs:   svcs,
-		Nomba:  nombaClient,
-	})
+	engine := router.Setup(cfg, database, q, repos, svcs)
 
 	email := "e2e-" + uuid.NewString() + "@example.com"
 	createBody, _ := json.Marshal(map[string]string{
@@ -93,11 +86,11 @@ func TestPhase2_E2E(t *testing.T) {
 		"nomba_account_id":     "acct-merchant",
 		"nomba_env":            "sandbox",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/tenants", bytes.NewReader(createBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewReader(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Bootstrap-Secret", "test-bootstrap-secret")
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
 	var createResp struct {
@@ -108,19 +101,19 @@ func TestPhase2_E2E(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &createResp))
 	require.NotEmpty(t, createResp.Data.APIKey)
 
-	meReq := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	meReq.Header.Set("Authorization", "Bearer "+createResp.Data.APIKey)
 	meW := httptest.NewRecorder()
-	router.ServeHTTP(meW, meReq)
+	engine.ServeHTTP(meW, meReq)
 	require.Equal(t, http.StatusOK, meW.Code)
 
 	planBody, _ := json.Marshal(map[string]any{
 		"name": "Starter", "amount": 100000, "currency": "NGN", "interval": "monthly",
 	})
-	planReq := httptest.NewRequest(http.MethodPost, "/v1/plans", bytes.NewReader(planBody))
+	planReq := httptest.NewRequest(http.MethodPost, "/api/v1/plans", bytes.NewReader(planBody))
 	planReq.Header.Set("Authorization", "Bearer "+createResp.Data.APIKey)
 	planReq.Header.Set("Content-Type", "application/json")
 	planW := httptest.NewRecorder()
-	router.ServeHTTP(planW, planReq)
+	engine.ServeHTTP(planW, planReq)
 	require.Equal(t, http.StatusCreated, planW.Code)
 }
