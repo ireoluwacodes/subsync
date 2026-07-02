@@ -69,7 +69,9 @@ internal/
   db/           PostgreSQL + GORM (models/, repos)
   api/          Gin router, middleware, handlers, DTOs
   service/      Orchestration layer
-  jobs/         asynq task handlers
+  jobs/         asynq task handlers (billing, dunning, lifecycle)
+  email/        Resend strategy + templates
+  storage/      Cloudinary strategy for invoice PDFs
   nomba/        Nomba API client (hackathon phase)
   config/       Environment configuration
   queue/        asynq + Redis client
@@ -118,7 +120,13 @@ See [`.env.example`](.env.example) for all configuration options.
 | `JWT_SECRET` | Prod | HS256 signing key for merchant dashboard JWTs |
 | `JWT_ACCESS_TTL` | No | Access token lifetime (default: 24h) |
 | `JWT_REFRESH_TTL` | No | Refresh token lifetime (default: 7d) |
-| `BILLING_MOCK_RESULT` | No | `success` or `failure` for mock invoice charges (Phase 2) |
+| `BILLING_MOCK_RESULT` | No | `success` or `failure` for mock invoice charges; leave empty for live Nomba |
+| `RESEND_API_KEY` | No | Resend API key for transactional email (Phase 3) |
+| `RESEND_FROM_EMAIL` | No | Default from address for Resend |
+| `CLOUDINARY_CLOUD_NAME` | No | Cloudinary cloud for invoice PDF storage |
+| `CLOUDINARY_API_KEY` | No | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | No | Cloudinary API secret |
+| `CLOUDINARY_FOLDER` | No | Cloudinary upload folder (default: `subsync/invoices`) |
 | `NOMBA_WEBHOOK_SIGNING_KEY` | No | Dev fallback for inbound Nomba webhooks |
 | `BOOTSTRAP_SECRET` | Prod | Protects `POST /api/v1/tenants` via `X-Bootstrap-Secret` header |
 | `WEBHOOK_SIGNING_SECRET` | Phase 4 | Outbound SubSync webhook signing |
@@ -168,8 +176,8 @@ make test-integration                        # postgres + redis integration test
 
 ## Roadmap
 1. **Phase 1** — Tenant auth, plans/customers/payment-methods CRUD (implemented)
-2. **Phase 2** — JWT auth, settings, subscriptions, invoices (per-merchant Nomba credentials)
-3. **Phase 3** — Background jobs (billing, dunning) with tenant-scoped Nomba calls
+2. **Phase 2** — JWT auth, settings, subscriptions, invoices (per-merchant Nomba credentials) (implemented)
+3. **Phase 3** — Background jobs (billing, dunning) with tenant-scoped Nomba calls (implemented)
 4. **Phase 4** — Outbound webhooks, customer portal, inbound Nomba webhooks
 5. **Phase 5** — Analytics + live Nomba charge swap
 

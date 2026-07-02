@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type SettingsService struct {
@@ -72,8 +73,8 @@ func (s *SettingsService) GetNomba(ctx context.Context, tenantID uuid.UUID) (*No
 
 func (s *SettingsService) nombaView(tenant *domain.Tenant) *NombaSettingsView {
 	return &NombaSettingsView{
-		WebhookURL:                   NombaWebhookURL(s.publicBaseURL, tenant.ID),
-		NombaClientID:                MaskClientID(tenant.NombaClientID),
+		WebhookURL:                   utils.NombaWebhookURL(s.publicBaseURL, tenant.ID),
+		NombaClientID:                utils.MaskClientID(tenant.NombaClientID),
 		NombaAccountID:               tenant.NombaAccountID,
 		NombaSubAccountID:            tenant.NombaSubAccountID,
 		NombaEnv:                     tenant.NombaEnv,
@@ -179,7 +180,7 @@ func (s *SettingsService) UpdateNomba(ctx context.Context, tenantID uuid.UUID, i
 		env = tenant.NombaEnv
 	}
 
-	if err := validateNombaInput(clientID, secret, accountID, env); err != nil {
+	if err := utils.ValidateNombaInput(clientID, secret, accountID, env); err != nil {
 		return nil, err
 	}
 
@@ -216,7 +217,7 @@ func (s *SettingsService) RotateAPIKey(ctx context.Context, tenantID uuid.UUID) 
 		return "", nil, err
 	}
 
-	apiKey, prefix, hash, err := generateAPIKey()
+	apiKey, prefix, hash, err := utils.GenerateAPIKey()
 	if err != nil {
 		return "", nil, err
 	}
@@ -235,14 +236,4 @@ func (s *SettingsService) RotateAPIKey(ctx context.Context, tenantID uuid.UUID) 
 	}
 	tenant.NombaClientSecret = ""
 	return apiKey, tenant, nil
-}
-
-func MaskClientID(clientID string) string {
-	if len(clientID) <= 8 {
-		if clientID == "" {
-			return ""
-		}
-		return strings.Repeat("*", len(clientID))
-	}
-	return clientID[:4] + strings.Repeat("*", len(clientID)-8) + clientID[len(clientID)-4:]
 }

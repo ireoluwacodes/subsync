@@ -34,6 +34,14 @@ type Config struct {
 	WebhookSigningSecret string
 	BootstrapSecret      string
 	PublicBaseURL        string
+
+	ResendAPIKey    string
+	ResendFromEmail string
+
+	CloudinaryCloudName   string
+	CloudinaryAPIKey      string
+	CloudinaryAPISecret   string
+	CloudinaryFolder      string
 }
 
 func Load() (*Config, error) {
@@ -50,6 +58,12 @@ func Load() (*Config, error) {
 		WebhookSigningSecret:          os.Getenv("WEBHOOK_SIGNING_SECRET"),
 		BootstrapSecret:               os.Getenv("BOOTSTRAP_SECRET"),
 		PublicBaseURL:                 getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		ResendAPIKey:                  os.Getenv("RESEND_API_KEY"),
+		ResendFromEmail:               os.Getenv("RESEND_FROM_EMAIL"),
+		CloudinaryCloudName:           os.Getenv("CLOUDINARY_CLOUD_NAME"),
+		CloudinaryAPIKey:              os.Getenv("CLOUDINARY_API_KEY"),
+		CloudinaryAPISecret:           os.Getenv("CLOUDINARY_API_SECRET"),
+		CloudinaryFolder:              getEnv("CLOUDINARY_FOLDER", "subsync/invoices"),
 	}
 
 	var err error

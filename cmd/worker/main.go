@@ -41,13 +41,19 @@ func main() {
 		}
 	}()
 
+	handlers, err := jobs.NewHandlers(ctx, cfg, log, database, q)
+	if err != nil {
+		log.Error("failed to wire worker handlers", zap.Error(err))
+		os.Exit(1)
+	}
+
 	server, err := q.NewServer(cfg.RedisURL, 10)
 	if err != nil {
 		log.Error("failed to create asynq server", zap.Error(err))
 		os.Exit(1)
 	}
 
-	registry := jobs.NewRegistry()
+	registry := jobs.NewRegistry(handlers)
 	registry.RegisterAll()
 
 	scheduler, err := q.NewScheduler(cfg.RedisURL)

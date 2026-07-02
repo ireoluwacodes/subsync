@@ -2,17 +2,17 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/auth"
+	"github.com/ireoluwacodes/subsync/internal/config"
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/email"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type AuthService struct {
@@ -23,6 +23,8 @@ type AuthService struct {
 	nomba         *nomba.Client
 	tenantSvc     *TenantService
 	publicBaseURL string
+	mailer        *email.MailerService
+	cfg           *config.Config
 }
 
 func NewAuthService(
@@ -33,6 +35,8 @@ func NewAuthService(
 	nombaClient *nomba.Client,
 	tenantSvc *TenantService,
 	publicBaseURL string,
+	mailer *email.MailerService,
+	cfg *config.Config,
 ) *AuthService {
 	return &AuthService{
 		users:         users,
@@ -42,6 +46,8 @@ func NewAuthService(
 		nomba:         nombaClient,
 		tenantSvc:     tenantSvc,
 		publicBaseURL: publicBaseURL,
+		mailer:        mailer,
+		cfg:           cfg,
 	}
 }
 
@@ -192,37 +198,78 @@ func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID) error {
 	return s.users.BumpTokenVersion(ctx, userID)
 }
 
-func (s *AuthService) ForgotPassword(ctx context.Context, email string) (string, error) {
-	user, err := s.users.GetByEmail(ctx, strings.ToLower(email))
+const (
+	passwordResetOTPTTL   = 10 * time.Minute
+	passwordResetTokenTTL = 15 * time.Minute
+)
+
+func (s *AuthService) ForgotPassword(ctx context.Context, emailAddr string) (string, error) {
+	user, err := s.users.GetByEmail(ctx, strings.ToLower(emailAddr))
 	if err != nil {
 		return "", nil // silent success
 	}
 
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
+	otp, err := utils.GenerateOTP()
+	if err != nil {
 		return "", err
 	}
-	token := hex.EncodeToString(raw)
-	hash := sha256.Sum256([]byte(token))
-	tokenHash := hex.EncodeToString(hash[:])
+
+	if err := s.resets.InvalidateUnusedForUser(ctx, user.ID); err != nil {
+		return "", err
+	}
 
 	if err := s.resets.Create(ctx, &domain.PasswordResetToken{
 		UserID:    user.ID,
-		TokenHash: tokenHash,
-		ExpiresAt: time.Now().Add(1 * time.Hour),
+		TokenHash: utils.HashResetSecret(otp),
+		ExpiresAt: time.Now().Add(passwordResetOTPTTL),
 	}); err != nil {
 		return "", err
 	}
 
-	return token, nil
+	if s.mailer != nil && s.mailer.Enabled() {
+		subject, html := email.PasswordResetOTPHTML(otp)
+		_ = s.mailer.Send(ctx, user.Email, subject, html)
+		return "", nil
+	}
+
+	return otp, nil
+}
+
+func (s *AuthService) ConfirmPasswordOTP(ctx context.Context, emailAddr, otp string) (string, error) {
+	if emailAddr == "" || otp == "" {
+		return "", fmt.Errorf("%w: email and otp are required", domain.ErrValidation)
+	}
+
+	user, err := s.users.GetByEmail(ctx, strings.ToLower(emailAddr))
+	if err != nil {
+		return "", domain.ErrNotFound
+	}
+
+	reset, err := s.resets.GetLatestValidByUserID(ctx, user.ID)
+	if err != nil {
+		return "", domain.ErrNotFound
+	}
+	if reset.TokenHash != utils.HashResetSecret(strings.TrimSpace(otp)) {
+		return "", domain.ErrNotFound
+	}
+
+	resetToken, err := utils.GenerateResetToken()
+	if err != nil {
+		return "", err
+	}
+
+	if err := s.resets.UpdateTokenHash(ctx, reset.ID, utils.HashResetSecret(resetToken), time.Now().Add(passwordResetTokenTTL)); err != nil {
+		return "", err
+	}
+
+	return resetToken, nil
 }
 
 func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
 	if token == "" || newPassword == "" {
 		return fmt.Errorf("%w: token and password are required", domain.ErrValidation)
 	}
-	hash := sha256.Sum256([]byte(token))
-	tokenHash := hex.EncodeToString(hash[:])
+	tokenHash := utils.HashResetSecret(token)
 
 	reset, err := s.resets.GetValidByTokenHash(ctx, tokenHash)
 	if err != nil {
@@ -243,7 +290,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword stri
 }
 
 func (s *AuthService) NombaWebhookURL(tenantID uuid.UUID) string {
-	return NombaWebhookURL(s.publicBaseURL, tenantID)
+	return utils.NombaWebhookURL(s.publicBaseURL, tenantID)
 }
 
 func (s *AuthService) ValidateAccessToken(ctx context.Context, token string) (*domain.User, *domain.Tenant, error) {

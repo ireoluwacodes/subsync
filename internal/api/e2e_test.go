@@ -73,7 +73,7 @@ func TestPhase2_E2E(t *testing.T) {
 	nombaClient := nomba.NewClient(nil, nombaSrv.Client())
 	nombaClient.SetTestBaseURL(nombaSrv.URL)
 	jwtSvc := auth.NewJWTService(cfg)
-	svcs := service.NewServices(repos, cfg, nombaClient, jwtSvc)
+	svcs := service.NewServices(repos, cfg, nombaClient, jwtSvc, q)
 
 	engine := router.Setup(cfg, database, q, repos, svcs)
 
@@ -116,4 +116,61 @@ func TestPhase2_E2E(t *testing.T) {
 	planW := httptest.NewRecorder()
 	engine.ServeHTTP(planW, planReq)
 	require.Equal(t, http.StatusCreated, planW.Code)
+
+	var planResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(planW.Body.Bytes(), &planResp))
+
+	custBody, _ := json.Marshal(map[string]any{
+		"email": "cust-" + uuid.NewString() + "@example.com",
+		"name":  "Jane Doe",
+	})
+	custReq := httptest.NewRequest(http.MethodPost, "/api/v1/customers", bytes.NewReader(custBody))
+	custReq.Header.Set("Authorization", "Bearer "+createResp.Data.APIKey)
+	custReq.Header.Set("Content-Type", "application/json")
+	custW := httptest.NewRecorder()
+	engine.ServeHTTP(custW, custReq)
+	require.Equal(t, http.StatusCreated, custW.Code, custW.Body.String())
+
+	var custResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(custW.Body.Bytes(), &custResp))
+
+	pmBody, _ := json.Marshal(map[string]any{
+		"customer_id": custResp.Data.ID,
+		"type":        "tokenized_card",
+		"token_key":   "tok_test",
+		"is_default":  true,
+	})
+	pmReq := httptest.NewRequest(http.MethodPost, "/api/v1/payment-methods", bytes.NewReader(pmBody))
+	pmReq.Header.Set("Authorization", "Bearer "+createResp.Data.APIKey)
+	pmReq.Header.Set("Content-Type", "application/json")
+	pmW := httptest.NewRecorder()
+	engine.ServeHTTP(pmW, pmReq)
+	require.Equal(t, http.StatusCreated, pmW.Code, pmW.Body.String())
+
+	var pmResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(pmW.Body.Bytes(), &pmResp))
+
+	subBody, _ := json.Marshal(map[string]any{
+		"customer_id":       custResp.Data.ID,
+		"plan_id":           planResp.Data.ID,
+		"payment_method_id": pmResp.Data.ID,
+	})
+	subReq := httptest.NewRequest(http.MethodPost, "/api/v1/subscriptions", bytes.NewReader(subBody))
+	subReq.Header.Set("Authorization", "Bearer "+createResp.Data.APIKey)
+	subReq.Header.Set("Content-Type", "application/json")
+	subW := httptest.NewRecorder()
+	engine.ServeHTTP(subW, subReq)
+	require.Equal(t, http.StatusCreated, subW.Code, subW.Body.String())
 }

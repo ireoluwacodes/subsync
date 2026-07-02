@@ -5,17 +5,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// RegisterPeriodicTasks registers cron-driven tasks on the asynq scheduler.
-// Placeholder entries are commented until Phase 3 implementation.
 func RegisterPeriodicTasks(scheduler *asynq.Scheduler) error {
 	entries := []struct {
 		cron string
 		task string
 	}{
-		// {"*/5 * * * *", TaskBillingChargeDue},
-		// {"0 * * * *", TaskTrialConvert},
-		// {"0 * * * *", TaskSubscriptionExpire},
-		// {"0 * * * *", TaskSubscriptionResume},
+		{"*/5 * * * *", TaskBillingChargeDue},
+		{"0 * * * *", TaskTrialConvert},
+		{"0 * * * *", TaskSubscriptionExpire},
+		{"0 * * * *", TaskSubscriptionResume},
 	}
 
 	for _, e := range entries {

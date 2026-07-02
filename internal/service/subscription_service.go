@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type SubscriptionService struct {
@@ -41,7 +43,7 @@ func (s *SubscriptionService) Create(ctx context.Context, tenantID uuid.UUID, in
 	}
 
 	now := time.Now().UTC()
-	periodEnd := addPlanPeriod(now, plan)
+	periodEnd := utils.PlanPeriodEnd(now, plan)
 
 	sub := &domain.Subscription{
 		TenantID:           tenantID,
@@ -80,19 +82,65 @@ func (s *SubscriptionService) Create(ctx context.Context, tenantID uuid.UUID, in
 	return sub, nil
 }
 
-func addPlanPeriod(start time.Time, plan *domain.Plan) time.Time {
-	switch plan.Interval {
-	case domain.PlanIntervalAnnual:
-		return start.AddDate(1, 0, 0)
-	case domain.PlanIntervalCustom:
-		days := 30
-		if plan.IntervalDays != nil {
-			days = *plan.IntervalDays
-		}
-		return start.AddDate(0, 0, days)
-	default:
-		return start.AddDate(0, 1, 0)
+func (s *SubscriptionService) ConvertTrialsEnding(ctx context.Context, before time.Time, limit int) (int, error) {
+	repo, ok := s.repo.(*db.SubscriptionRepo)
+	if !ok {
+		return 0, fmt.Errorf("subscription repo does not support worker queries")
 	}
+	subs, err := repo.ListTrialsEnding(ctx, before, limit)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, sub := range subs {
+		from := sub.State
+		sub.State = domain.SubscriptionStateActive
+		next := sub.CurrentPeriodEnd
+		sub.NextBillingAt = &next
+		if _, err := s.applyTransition(ctx, sub, from, domain.SubscriptionStateActive, "trial_ended", "system"); err != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (s *SubscriptionService) ExpireCancelAtPeriodEnd(ctx context.Context, before time.Time, limit int) (int, error) {
+	repo, ok := s.repo.(*db.SubscriptionRepo)
+	if !ok {
+		return 0, fmt.Errorf("subscription repo does not support worker queries")
+	}
+	subs, err := repo.ListCancelAtPeriodEnd(ctx, before, limit)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, sub := range subs {
+		if _, err := s.Cancel(ctx, sub.TenantID, sub.ID, CancelInput{Reason: "period_ended"}, "system"); err != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (s *SubscriptionService) ResumePausedEnding(ctx context.Context, before time.Time, limit int) (int, error) {
+	repo, ok := s.repo.(*db.SubscriptionRepo)
+	if !ok {
+		return 0, fmt.Errorf("subscription repo does not support worker queries")
+	}
+	subs, err := repo.ListResumingFromPause(ctx, before, limit)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, sub := range subs {
+		if _, err := s.Resume(ctx, sub.TenantID, sub.ID, "system"); err != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
 }
 
 func (s *SubscriptionService) Get(ctx context.Context, tenantID, id uuid.UUID) (*domain.Subscription, error) {

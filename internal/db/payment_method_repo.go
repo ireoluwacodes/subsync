@@ -28,6 +28,17 @@ func (r *PaymentMethodRepo) Create(ctx context.Context, pm *domain.PaymentMethod
 	return nil
 }
 
+func (r *PaymentMethodRepo) GetDefaultForCustomer(ctx context.Context, tenantID, customerID uuid.UUID) (*domain.PaymentMethod, error) {
+	var m models.PaymentMethod
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND customer_id = ? AND is_default = ?", tenantID, customerID, true).
+		First(&m).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	return models.PaymentMethodToDomain(&m), nil
+}
+
 func (r *PaymentMethodRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.PaymentMethod, error) {
 	var m models.PaymentMethod
 	err := r.db.WithContext(ctx).

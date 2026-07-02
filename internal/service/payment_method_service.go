@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type PaymentMethodService struct {
@@ -29,7 +29,7 @@ type CreatePaymentMethodInput struct {
 }
 
 func (s *PaymentMethodService) Create(ctx context.Context, tenantID uuid.UUID, in CreatePaymentMethodInput) (*domain.PaymentMethod, error) {
-	if err := validatePaymentMethodInput(in); err != nil {
+	if err := utils.ValidatePaymentMethod(in.Type, in.TokenKey, in.MandateID); err != nil {
 		return nil, err
 	}
 
@@ -83,20 +83,4 @@ func (s *PaymentMethodService) SetDefault(ctx context.Context, tenantID, id uuid
 
 	pm.IsDefault = true
 	return pm, nil
-}
-
-func validatePaymentMethodInput(in CreatePaymentMethodInput) error {
-	switch in.Type {
-	case domain.PaymentMethodTokenizedCard:
-		if in.TokenKey == "" {
-			return fmt.Errorf("%w: token_key is required for tokenized_card", domain.ErrValidation)
-		}
-	case domain.PaymentMethodDirectDebit:
-		if in.MandateID == "" {
-			return fmt.Errorf("%w: mandate_id is required for direct_debit", domain.ErrValidation)
-		}
-	default:
-		return fmt.Errorf("%w: invalid payment method type", domain.ErrValidation)
-	}
-	return nil
 }

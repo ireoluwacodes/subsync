@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type PlanService struct {
@@ -41,7 +42,7 @@ type UpdatePlanInput struct {
 }
 
 func (s *PlanService) Create(ctx context.Context, tenantID uuid.UUID, in CreatePlanInput) (*domain.Plan, error) {
-	if err := validatePlanInput(in.Interval, in.IntervalDays, in.Amount); err != nil {
+	if err := utils.ValidatePlanInput(in.Interval, in.IntervalDays, in.Amount); err != nil {
 		return nil, err
 	}
 
@@ -86,7 +87,7 @@ func (s *PlanService) List(ctx context.Context, tenantID uuid.UUID, activeOnly b
 }
 
 func (s *PlanService) Update(ctx context.Context, tenantID, id uuid.UUID, in UpdatePlanInput) (*domain.Plan, error) {
-	if err := validatePlanInput(in.Interval, in.IntervalDays, in.Amount); err != nil {
+	if err := utils.ValidatePlanInput(in.Interval, in.IntervalDays, in.Amount); err != nil {
 		return nil, err
 	}
 
@@ -120,21 +121,4 @@ func (s *PlanService) Archive(ctx context.Context, tenantID, id uuid.UUID) error
 		return fmt.Errorf("%w: plan is referenced by subscriptions", domain.ErrConflict)
 	}
 	return s.repo.Archive(ctx, tenantID, id)
-}
-
-func validatePlanInput(interval domain.PlanInterval, intervalDays *int, amount int64) error {
-	if amount <= 0 {
-		return fmt.Errorf("%w: amount must be greater than zero", domain.ErrValidation)
-	}
-	switch interval {
-	case domain.PlanIntervalMonthly, domain.PlanIntervalAnnual:
-		return nil
-	case domain.PlanIntervalCustom:
-		if intervalDays == nil || *intervalDays <= 0 {
-			return fmt.Errorf("%w: interval_days is required for custom interval", domain.ErrValidation)
-		}
-		return nil
-	default:
-		return fmt.Errorf("%w: invalid interval", domain.ErrValidation)
-	}
 }

@@ -38,5 +38,8 @@ type PasswordResetToken struct {
 type PasswordResetRepository interface {
 	Create(ctx context.Context, token *PasswordResetToken) error
 	GetValidByTokenHash(ctx context.Context, tokenHash string) (*PasswordResetToken, error)
+	GetLatestValidByUserID(ctx context.Context, userID uuid.UUID) (*PasswordResetToken, error)
+	InvalidateUnusedForUser(ctx context.Context, userID uuid.UUID) error
+	UpdateTokenHash(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error
 	MarkUsed(ctx context.Context, id uuid.UUID) error
 }

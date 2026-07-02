@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type TenantService struct {
@@ -45,7 +45,7 @@ type CreateTenantResult struct {
 }
 
 func (s *TenantService) CreateTenant(ctx context.Context, in CreateTenantInput) (*CreateTenantResult, error) {
-	if err := validateNombaInput(in.NombaClientID, in.NombaClientSecret, in.NombaAccountID, in.NombaEnv); err != nil {
+	if err := utils.ValidateNombaInput(in.NombaClientID, in.NombaClientSecret, in.NombaAccountID, in.NombaEnv); err != nil {
 		return nil, err
 	}
 	if in.Name == "" || in.Email == "" {
@@ -58,12 +58,12 @@ func (s *TenantService) CreateTenant(ctx context.Context, in CreateTenantInput) 
 		}
 	}
 
-	apiKey, prefix, hash, err := generateAPIKey()
+	apiKey, prefix, hash, err := utils.GenerateAPIKey()
 	if err != nil {
 		return nil, err
 	}
 
-	webhookSecret, err := generateWebhookSecret()
+	webhookSecret, err := utils.GenerateWebhookSecret()
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, in CreateTenantInput) 
 		APIKeyPrefix:      prefix,
 		APIKeyHash:        hash,
 		WebhookSecret:     webhookSecret,
-		DunningConfig:     defaultDunningConfig(),
+		DunningConfig:     utils.DefaultDunningConfig(),
 		Branding:          map[string]any{},
 		BillingEmail:      map[string]any{},
 	}
@@ -92,17 +92,6 @@ func (s *TenantService) CreateTenant(ctx context.Context, in CreateTenantInput) 
 	return &CreateTenantResult{Tenant: tenant, APIKey: apiKey}, nil
 }
 
-func validateNombaInput(clientID, clientSecret, accountID, nombaEnv string) error {
-	if clientID == "" || clientSecret == "" || accountID == "" {
-		return fmt.Errorf("%w: nomba_client_id, nomba_client_secret, and nomba_account_id are required", domain.ErrValidation)
-	}
-	env := strings.ToLower(nombaEnv)
-	if env != domain.NombaEnvSandbox && env != domain.NombaEnvProduction {
-		return fmt.Errorf("%w: nomba_env must be sandbox or production", domain.ErrValidation)
-	}
-	return nil
-}
-
 func (s *TenantService) GetTenant(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
 	return s.repo.GetByID(ctx, id)
 }
@@ -112,15 +101,4 @@ func (s *TenantService) LoadNombaCredentials(ctx context.Context, tenant *domain
 		return fmt.Errorf("tenant credential loader not configured")
 	}
 	return s.loader.LoadNombaSecret(ctx, tenant)
-}
-
-func defaultDunningConfig() map[string]any {
-	return map[string]any{
-		"steps": []map[string]any{
-			{"delay_days": 1, "action": "retry"},
-			{"delay_days": 3, "action": "retry_and_notify"},
-			{"delay_days": 7, "action": "mandate_fallback"},
-			{"delay_days": 14, "action": "cancel"},
-		},
-	}
 }

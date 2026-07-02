@@ -38,6 +38,12 @@ func main() {
 	}
 	defer database.Close()
 
+	if err := db.Migrate(ctx, database); err != nil {
+		log.Error("failed to run database migrations", zap.Error(err))
+		os.Exit(1)
+	}
+	log.Info("database migrations applied")
+
 	q, err := queue.Connect(cfg.RedisURL)
 	if err != nil {
 		log.Error("failed to connect to redis", zap.Error(err))
@@ -67,7 +73,7 @@ func main() {
 	repos := db.NewRepos(database, enc)
 	nombaClient := nomba.NewClient(log, nil)
 	jwtSvc := auth.NewJWTService(cfg)
-	svcs := service.NewServices(repos, cfg, nombaClient, jwtSvc)
+	svcs := service.NewServices(repos, cfg, nombaClient, jwtSvc, q)
 
 	engine := router.Setup(cfg, database, q, repos, svcs)
 

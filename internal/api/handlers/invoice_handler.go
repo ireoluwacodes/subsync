@@ -90,6 +90,17 @@ func (h *InvoiceHandler) PDF(c *gin.Context) {
 		dto.RespondError(c, err)
 		return
 	}
+	inv, _, err := h.svc.Get(c.Request.Context(), tenant.ID, id)
+	if err != nil {
+		dto.RespondError(c, err)
+		return
+	}
+	if inv.Metadata != nil {
+		if pdfURL, ok := inv.Metadata["pdf_url"].(string); ok && pdfURL != "" {
+			c.Redirect(http.StatusFound, pdfURL)
+			return
+		}
+	}
 	data, err := h.svc.RenderPDF(c.Request.Context(), tenant.ID, id, tenant)
 	if err != nil {
 		dto.RespondError(c, err)

@@ -134,12 +134,34 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		dto.RespondError(c, dto.NewBindError("invalid request body"))
 		return
 	}
-	token, _ := h.svc.ForgotPassword(c.Request.Context(), req.Email)
+	otp, _ := h.svc.ForgotPassword(c.Request.Context(), req.Email)
 	resp := gin.H{"ok": true}
-	if token != "" {
-		resp["reset_token"] = token // dev stub until Phase 3 email
+	if otp != "" {
+		resp["otp"] = otp // dev stub when email is disabled
 	}
 	dto.RespondOK(c, resp)
+}
+
+type confirmPasswordOTPRequest struct {
+	Email string `json:"email" binding:"required,email"`
+	OTP   string `json:"otp" binding:"required,len=6"`
+}
+
+func (h *AuthHandler) ConfirmPasswordOTP(c *gin.Context) {
+	var req confirmPasswordOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		dto.RespondError(c, dto.NewBindError("invalid request body"))
+		return
+	}
+	resetToken, err := h.svc.ConfirmPasswordOTP(c.Request.Context(), req.Email, req.OTP)
+	if err != nil {
+		dto.RespondError(c, err)
+		return
+	}
+	dto.RespondOK(c, gin.H{
+		"ok":          true,
+		"reset_token": resetToken,
+	})
 }
 
 type resetPasswordRequest struct {
