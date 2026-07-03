@@ -118,10 +118,3 @@ func (r *Registry) handleInvoicePDF(ctx context.Context, t *asynq.Task) error {
 func (r *Registry) handleWebhookDeliverJob(ctx context.Context, t *asynq.Task) error {
 	return r.handlers.handleWebhookDeliver(ctx, t.Payload())
 }
-
-func noopHandler(name string) asynq.HandlerFunc {
-	return func(ctx context.Context, t *asynq.Task) error {
-		zap.L().Info("job stub executed", zap.String("task", name))
-		return nil
-	}
-}

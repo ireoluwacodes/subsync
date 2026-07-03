@@ -88,7 +88,7 @@ func (h *Handlers) deliverWebhook(ctx context.Context, tenantID, deliveryID uuid
 		_ = h.Repos.Webhooks.UpdateDelivery(ctx, delivery)
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	status := resp.StatusCode
