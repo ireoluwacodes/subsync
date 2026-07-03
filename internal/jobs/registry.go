@@ -27,7 +27,7 @@ func (r *Registry) RegisterAll() {
 	r.mux.HandleFunc(TaskTrialConvert, r.handleTrialConvert)
 	r.mux.HandleFunc(TaskSubscriptionExpire, r.handleSubscriptionExpire)
 	r.mux.HandleFunc(TaskSubscriptionResume, r.handleSubscriptionResume)
-	r.mux.HandleFunc(TaskWebhookDeliver, handleWebhookDeliver)
+	r.mux.HandleFunc(TaskWebhookDeliver, r.handleWebhookDeliverJob)
 	r.mux.HandleFunc(TaskInvoicePDF, r.handleInvoicePDF)
 }
 
@@ -115,8 +115,8 @@ func (r *Registry) handleInvoicePDF(ctx context.Context, t *asynq.Task) error {
 	return nil
 }
 
-func handleWebhookDeliver(ctx context.Context, t *asynq.Task) error {
-	return noopHandler(TaskWebhookDeliver)(ctx, t)
+func (r *Registry) handleWebhookDeliverJob(ctx context.Context, t *asynq.Task) error {
+	return r.handlers.handleWebhookDeliver(ctx, t.Payload())
 }
 
 func noopHandler(name string) asynq.HandlerFunc {

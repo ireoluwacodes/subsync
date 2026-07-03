@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ type BillingService struct {
 	subs      *SubscriptionService
 	mailer    *email.MailerService
 	publisher TaskPublisher
+	webhooks  *WebhookService
 }
 
 func NewBillingService(
@@ -42,6 +44,7 @@ func NewBillingService(
 	subs *SubscriptionService,
 	mailer *email.MailerService,
 	publisher TaskPublisher,
+	webhooks *WebhookService,
 ) *BillingService {
 	if clk == nil {
 		clk = clock.RealClock{}
@@ -54,6 +57,7 @@ func NewBillingService(
 		subs:      subs,
 		mailer:    mailer,
 		publisher: publisher,
+		webhooks:  webhooks,
 	}
 }
 
@@ -105,6 +109,9 @@ func (s *BillingService) ChargeDueSubscription(ctx context.Context, tenantID, su
 	if inv.Status == domain.InvoiceStatusPaid {
 		return s.advanceSubscriptionPeriod(ctx, sub, plan)
 	}
+	if inv.Status == domain.InvoiceStatusProcessing {
+		return nil
+	}
 
 	pm, err := s.resolvePaymentMethod(ctx, tenantID, sub, customer.ID)
 	if err != nil {
@@ -122,6 +129,10 @@ func (s *BillingService) ChargeDueSubscription(ctx context.Context, tenantID, su
 	charged, chargeErr := s.invoices.ChargeWithPayment(ctx, tenant, pm, inv)
 	if chargeErr != nil {
 		return s.handleChargeFailure(ctx, tenant, customer, sub, charged, chargeErr)
+	}
+
+	if charged.Status == domain.InvoiceStatusProcessing {
+		return nil
 	}
 
 	if err := s.handleChargeSuccess(ctx, tenant, customer, sub, plan, charged); err != nil {
@@ -239,4 +250,98 @@ func (s *BillingService) delayForDunningStep(tenant *domain.Tenant, stepIndex in
 func (s *BillingService) EnqueueInitialDunning(ctx context.Context, tenant *domain.Tenant, subscriptionID uuid.UUID) {
 	delay := s.delayForDunningStep(tenant, 0)
 	s.enqueueDunningStep(ctx, tenant.ID, subscriptionID, delay)
+}
+
+// FinalizePaidInvoice marks an invoice paid and advances the subscription after webhook confirmation.
+func (s *BillingService) FinalizePaidInvoice(ctx context.Context, tenantID, invoiceID uuid.UUID, transactionID string) error {
+	inv, err := s.repos.Invoices.GetByID(ctx, tenantID, invoiceID)
+	if err != nil {
+		return err
+	}
+	if inv.Status == domain.InvoiceStatusPaid {
+		return nil
+	}
+	if inv.Status != domain.InvoiceStatusOpen && inv.Status != domain.InvoiceStatusProcessing {
+		return nil
+	}
+
+	now := s.clock.Now().UTC()
+	inv.Status = domain.InvoiceStatusPaid
+	inv.AmountPaid = inv.AmountDue
+	inv.PaidAt = &now
+	if transactionID != "" {
+		inv.NombaTransactionID = transactionID
+	}
+	if err := s.repos.Invoices.Update(ctx, inv); err != nil {
+		return err
+	}
+
+	sub, err := s.repos.Subscriptions.GetByID(ctx, tenantID, inv.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	plan, err := s.repos.Plans.GetByID(ctx, tenantID, sub.PlanID)
+	if err != nil {
+		return err
+	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	customer, err := s.repos.Customers.GetByID(ctx, tenantID, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.handleChargeSuccess(ctx, tenant, customer, sub, plan, inv); err != nil {
+		return err
+	}
+
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventInvoicePaid, map[string]any{
+			"id":     inv.ID.String(),
+			"status": string(inv.Status),
+			"amount_paid": inv.AmountPaid,
+			"currency": inv.Currency,
+		})
+	}
+	return nil
+}
+
+// HandleWebhookPaymentFailure processes a Nomba payment_failed webhook for an invoice.
+func (s *BillingService) HandleWebhookPaymentFailure(ctx context.Context, tenantID, invoiceID uuid.UUID) error {
+	inv, err := s.repos.Invoices.GetByID(ctx, tenantID, invoiceID)
+	if err != nil {
+		return err
+	}
+	if inv.Status == domain.InvoiceStatusPaid {
+		return nil
+	}
+
+	tenant, err := s.repos.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	sub, err := s.repos.Subscriptions.GetByID(ctx, tenantID, inv.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	customer, err := s.repos.Customers.GetByID(ctx, tenantID, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	inv.Status = domain.InvoiceStatusOpen
+	now := s.clock.Now().UTC()
+	inv.NextAttemptAt = utils.PtrTime(now.Add(24 * time.Hour))
+	_ = s.repos.Invoices.Update(ctx, inv)
+
+	err = s.handleChargeFailure(ctx, tenant, customer, sub, inv, fmt.Errorf("%w: nomba payment failed", domain.ErrValidation))
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventInvoicePaymentFailed, map[string]any{
+			"id":     inv.ID.String(),
+			"status": string(inv.Status),
+		})
+	}
+	return err
 }

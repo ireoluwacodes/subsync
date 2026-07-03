@@ -11,10 +11,11 @@ import (
 type PaymentMethodService struct {
 	repo         domain.PaymentMethodRepository
 	customerRepo domain.CustomerRepository
+	webhooks     *WebhookService
 }
 
-func NewPaymentMethodService(repo domain.PaymentMethodRepository, customerRepo domain.CustomerRepository) *PaymentMethodService {
-	return &PaymentMethodService{repo: repo, customerRepo: customerRepo}
+func NewPaymentMethodService(repo domain.PaymentMethodRepository, customerRepo domain.CustomerRepository, webhooks *WebhookService) *PaymentMethodService {
+	return &PaymentMethodService{repo: repo, customerRepo: customerRepo, webhooks: webhooks}
 }
 
 type CreatePaymentMethodInput struct {
@@ -58,6 +59,13 @@ func (s *PaymentMethodService) Create(ctx context.Context, tenantID uuid.UUID, i
 			return nil, err
 		}
 		pm.IsDefault = true
+	}
+
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventPaymentMethodAttached, map[string]any{
+			"id":          pm.ID.String(),
+			"customer_id": pm.CustomerID.String(),
+		})
 	}
 
 	return pm, nil

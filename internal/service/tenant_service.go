@@ -96,6 +96,19 @@ func (s *TenantService) GetTenant(ctx context.Context, id uuid.UUID) (*domain.Te
 	return s.repo.GetByID(ctx, id)
 }
 
+func (s *TenantService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
+	return s.GetTenant(ctx, id)
+}
+
+func (s *TenantService) LoadNombaWebhookSecret(ctx context.Context, tenant *domain.Tenant) error {
+	if l, ok := s.repo.(interface {
+		LoadNombaWebhookSecret(ctx context.Context, tenant *domain.Tenant) error
+	}); ok {
+		return l.LoadNombaWebhookSecret(ctx, tenant)
+	}
+	return fmt.Errorf("tenant webhook secret loader not configured")
+}
+
 func (s *TenantService) LoadNombaCredentials(ctx context.Context, tenant *domain.Tenant) error {
 	if s.loader == nil {
 		return fmt.Errorf("tenant credential loader not configured")

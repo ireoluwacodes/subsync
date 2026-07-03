@@ -27,6 +27,15 @@ func (m *memoryInvoiceRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID)
 	}
 	return nil, domain.ErrNotFound
 }
+func (m *memoryInvoiceRepo) GetByNombaOrderRef(ctx context.Context, tenantID uuid.UUID, orderRef string) (*domain.Invoice, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *memoryInvoiceRepo) GetByNombaTransactionID(ctx context.Context, tenantID uuid.UUID, transactionID string) (*domain.Invoice, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *memoryInvoiceRepo) GetOpenBySubscription(ctx context.Context, tenantID, subscriptionID uuid.UUID) (*domain.Invoice, error) {
+	return nil, domain.ErrNotFound
+}
 func (m *memoryInvoiceRepo) List(ctx context.Context, tenantID uuid.UUID, filter domain.InvoiceListFilter) ([]*domain.Invoice, int64, error) {
 	return nil, 0, nil
 }
@@ -44,7 +53,7 @@ func (m *memoryInvoiceRepo) SumPaidByCustomer(ctx context.Context, tenantID, cus
 func TestInvoiceService_MockChargeSuccess(t *testing.T) {
 	repo := &memoryInvoiceRepo{}
 	cfg := &config.Config{BillingMockResult: "success"}
-	svc := NewInvoiceService(repo, cfg, nil, nil)
+	svc := NewInvoiceService(repo, cfg, nil, nil, nil)
 	inv := &domain.Invoice{
 		TenantID:  uuid.New(),
 		Status:    domain.InvoiceStatusOpen,
@@ -60,7 +69,7 @@ func TestInvoiceService_MockChargeSuccess(t *testing.T) {
 func TestInvoiceService_MockChargeFailure(t *testing.T) {
 	repo := &memoryInvoiceRepo{}
 	cfg := &config.Config{BillingMockResult: "failure"}
-	svc := NewInvoiceService(repo, cfg, nil, nil)
+	svc := NewInvoiceService(repo, cfg, nil, nil, nil)
 	inv := &domain.Invoice{
 		TenantID:  uuid.New(),
 		Status:    domain.InvoiceStatusOpen,

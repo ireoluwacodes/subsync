@@ -12,6 +12,7 @@ type InvoiceStatus string
 const (
 	InvoiceStatusDraft         InvoiceStatus = "draft"
 	InvoiceStatusOpen          InvoiceStatus = "open"
+	InvoiceStatusProcessing    InvoiceStatus = "processing"
 	InvoiceStatusPaid          InvoiceStatus = "paid"
 	InvoiceStatusVoid          InvoiceStatus = "void"
 	InvoiceStatusUncollectible InvoiceStatus = "uncollectible"
@@ -72,6 +73,9 @@ type InvoiceListFilter struct {
 type InvoiceRepository interface {
 	Create(ctx context.Context, invoice *Invoice) error
 	GetByID(ctx context.Context, tenantID, id uuid.UUID) (*Invoice, error)
+	GetByNombaOrderRef(ctx context.Context, tenantID uuid.UUID, orderRef string) (*Invoice, error)
+	GetByNombaTransactionID(ctx context.Context, tenantID uuid.UUID, transactionID string) (*Invoice, error)
+	GetOpenBySubscription(ctx context.Context, tenantID, subscriptionID uuid.UUID) (*Invoice, error)
 	List(ctx context.Context, tenantID uuid.UUID, filter InvoiceListFilter) ([]*Invoice, int64, error)
 	Update(ctx context.Context, invoice *Invoice) error
 	CreateLineItem(ctx context.Context, item *InvoiceLineItem) error

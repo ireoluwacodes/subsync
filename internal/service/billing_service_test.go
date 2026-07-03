@@ -10,8 +10,8 @@ import (
 
 func TestNewBillingService(t *testing.T) {
 	cfg := &config.Config{BillingMockResult: "success"}
-	inv := NewInvoiceService(nil, cfg, nil, nil)
-	svc := NewBillingService(cfg, nil, nil, inv, &SubscriptionService{}, email.NewMailerService(nil), nil)
+	inv := NewInvoiceService(nil, cfg, nil, nil, nil)
+	svc := NewBillingService(cfg, nil, nil, inv, &SubscriptionService{}, email.NewMailerService(nil), nil, nil)
 	require.NotNil(t, svc)
 }
 

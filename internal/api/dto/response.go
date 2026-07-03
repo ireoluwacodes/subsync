@@ -79,6 +79,8 @@ func mapError(err error) (*APIError, int) {
 		return &APIError{Code: "validation_failed", Message: err.Error()}, http.StatusUnprocessableEntity
 	case errors.Is(err, domain.ErrInvalidNombaCredentials):
 		return &APIError{Code: "invalid_nomba_credentials", Message: err.Error()}, http.StatusUnprocessableEntity
+	case errors.Is(err, domain.ErrUnauthorized):
+		return &APIError{Code: "unauthorized", Message: err.Error()}, http.StatusUnauthorized
 	case errors.Is(err, domain.ErrNotImplemented):
 		return &APIError{Code: "not_implemented", Message: err.Error()}, http.StatusNotImplemented
 	default:

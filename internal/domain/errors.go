@@ -8,4 +8,5 @@ var (
 	ErrInvalidTransition = errors.New("invalid transition")
 	ErrValidation        = errors.New("validation failed")
 	ErrNotImplemented    = errors.New("not implemented")
+	ErrUnauthorized      = errors.New("unauthorized")
 )

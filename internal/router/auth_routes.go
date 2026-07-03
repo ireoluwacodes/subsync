@@ -9,7 +9,7 @@ func RegisterAuthPublicRoutes(api *gin.RouterGroup, h *handlers.AuthHandler) {
 	g := api.Group("/auth")
 	g.POST("/register", h.Register)
 	g.POST("/login", h.Login)
-	g.POST("/refresh", h.Refresh)
+	g.GET("/refresh", h.Refresh)
 	g.POST("/forgot-password", h.ForgotPassword)
 	g.POST("/confirm-password-otp", h.ConfirmPasswordOTP)
 	g.POST("/reset-password", h.ResetPassword)

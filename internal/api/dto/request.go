@@ -9,16 +9,6 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/service"
 )
 
-type CreateTenantRequest struct {
-	Name              string `json:"name" binding:"required"`
-	Email             string `json:"email" binding:"required,email"`
-	NombaClientID     string `json:"nomba_client_id" binding:"required"`
-	NombaClientSecret string `json:"nomba_client_secret" binding:"required"`
-	NombaAccountID    string `json:"nomba_account_id" binding:"required"`
-	NombaSubAccountID string `json:"nomba_sub_account_id"`
-	NombaEnv          string `json:"nomba_env" binding:"required"`
-}
-
 type CreatePlanRequest struct {
 	Name         string              `json:"name" binding:"required"`
 	Description  string              `json:"description"`
@@ -165,11 +155,6 @@ type TenantResponse struct {
 	BillingEmail      map[string]any `json:"billing_email,omitempty"`
 	CreatedAt         string         `json:"created_at"`
 	UpdatedAt         string         `json:"updated_at"`
-}
-
-type CreateTenantResponse struct {
-	Tenant TenantResponse `json:"tenant"`
-	APIKey string         `json:"api_key"`
 }
 
 func TenantToResponse(t *domain.Tenant, includeWebhookSecret bool) TenantResponse {

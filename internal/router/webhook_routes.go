@@ -9,6 +9,7 @@ func RegisterWebhookRoutes(rg *gin.RouterGroup, h *handlers.WebhookHandler) {
 	rg.POST("/webhook-endpoints", h.CreateEndpoint)
 	rg.GET("/webhook-endpoints", h.ListEndpoints)
 	rg.GET("/webhook-endpoints/:id", h.GetEndpoint)
+	rg.GET("/webhook-endpoints/:id/deliveries", h.ListDeliveries)
 	rg.PUT("/webhook-endpoints/:id", h.UpdateEndpoint)
 	rg.DELETE("/webhook-endpoints/:id", h.DeleteEndpoint)
 }

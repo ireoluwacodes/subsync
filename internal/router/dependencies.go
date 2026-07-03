@@ -13,6 +13,7 @@ type Dependencies struct {
 	Repos       *db.Repos
 	Queue       *queue.Queue
 	AuthService *service.AuthService
+	Services    *service.Services
 
 	HealthHandler        *handlers.HealthHandler
 	AuthHandler          *handlers.AuthHandler
@@ -26,4 +27,5 @@ type Dependencies struct {
 	WebhookHandler       *handlers.WebhookHandler
 	PortalHandler        *handlers.PortalHandler
 	AnalyticsHandler     *handlers.AnalyticsHandler
+	NombaWebhookHandler  *handlers.NombaWebhookHandler
 }

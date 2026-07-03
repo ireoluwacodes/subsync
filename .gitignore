@@ -1,5 +1,7 @@
-# Binaries
+# Binaries / air
 bin/
+tmp/
+build-errors.log
 dist/
 *.exe
 *.exe~

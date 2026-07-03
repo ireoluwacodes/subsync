@@ -32,7 +32,6 @@ type Config struct {
 
 	BillingMockResult    string
 	WebhookSigningSecret string
-	BootstrapSecret      string
 	PublicBaseURL        string
 
 	ResendAPIKey    string
@@ -54,9 +53,8 @@ func Load() (*Config, error) {
 		NombaCredentialsEncryptionKey: os.Getenv("NOMBA_CREDENTIALS_ENCRYPTION_KEY"),
 		NombaWebhookSigningKey:        os.Getenv("NOMBA_WEBHOOK_SIGNING_KEY"),
 		JWTSecret:                     os.Getenv("JWT_SECRET"),
-		BillingMockResult:             getEnv("BILLING_MOCK_RESULT", "success"),
+		BillingMockResult:             os.Getenv("BILLING_MOCK_RESULT"),
 		WebhookSigningSecret:          os.Getenv("WEBHOOK_SIGNING_SECRET"),
-		BootstrapSecret:               os.Getenv("BOOTSTRAP_SECRET"),
 		PublicBaseURL:                 getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
 		ResendAPIKey:                  os.Getenv("RESEND_API_KEY"),
 		ResendFromEmail:               os.Getenv("RESEND_FROM_EMAIL"),
@@ -128,9 +126,6 @@ func (c *Config) validate() error {
 		}
 		if c.RedisURL == "" {
 			return fmt.Errorf("REDIS_URL is required in production")
-		}
-		if c.BootstrapSecret == "" {
-			return fmt.Errorf("BOOTSTRAP_SECRET is required in production")
 		}
 		if c.JWTSecret == "" {
 			return fmt.Errorf("JWT_SECRET is required in production")

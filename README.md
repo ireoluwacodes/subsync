@@ -120,7 +120,7 @@ See [`.env.example`](.env.example) for all configuration options.
 | `JWT_SECRET` | Prod | HS256 signing key for merchant dashboard JWTs |
 | `JWT_ACCESS_TTL` | No | Access token lifetime (default: 24h) |
 | `JWT_REFRESH_TTL` | No | Refresh token lifetime (default: 7d) |
-| `BILLING_MOCK_RESULT` | No | `success` or `failure` for mock invoice charges; leave empty for live Nomba |
+| `BILLING_MOCK_RESULT` | No | Leave empty for live Nomba charges. Set to `success` or `failure` to mock invoice charges locally |
 | `RESEND_API_KEY` | No | Resend API key for transactional email (Phase 3) |
 | `RESEND_FROM_EMAIL` | No | Default from address for Resend |
 | `CLOUDINARY_CLOUD_NAME` | No | Cloudinary cloud for invoice PDF storage |
@@ -128,7 +128,6 @@ See [`.env.example`](.env.example) for all configuration options.
 | `CLOUDINARY_API_SECRET` | No | Cloudinary API secret |
 | `CLOUDINARY_FOLDER` | No | Cloudinary upload folder (default: `subsync/invoices`) |
 | `NOMBA_WEBHOOK_SIGNING_KEY` | No | Dev fallback for inbound Nomba webhooks |
-| `BOOTSTRAP_SECRET` | Prod | Protects `POST /api/v1/tenants` via `X-Bootstrap-Secret` header |
 | `WEBHOOK_SIGNING_SECRET` | Phase 4 | Outbound SubSync webhook signing |
 
 See [nomba-integration.md](nomba-integration.md) for API validation details.
@@ -147,23 +146,7 @@ Each merchant stores their own Nomba OAuth credentials (`client_id`, encrypted `
 
 ## API auth
 
-**Self-serve (dashboard):** `POST /api/v1/auth/register` then `POST /api/v1/auth/login` → use `Authorization: Bearer <access_jwt>`.
-
-**Ops bootstrap:** `POST /api/v1/tenants` with `X-Bootstrap-Secret` (returns API key once):
-
-```bash
-curl -X POST http://localhost:8080/api/v1/tenants \
-  -H "Content-Type: application/json" \
-  -H "X-Bootstrap-Secret: $BOOTSTRAP_SECRET" \
-  -d '{
-    "name":"Acme",
-    "email":"billing@acme.com",
-    "nomba_client_id":"...",
-    "nomba_client_secret":"...",
-    "nomba_account_id":"...",
-    "nomba_env":"sandbox"
-  }'
-```
+**Self-serve (dashboard):** `POST /api/v1/auth/register` then `POST /api/v1/auth/login` → use `Authorization: Bearer <access_jwt>` or the returned `api_key`.
 
 Use the returned `api_key` or JWT as `Authorization: Bearer <token>` for `/api/v1/*` routes.
 
@@ -178,6 +161,6 @@ make test-integration                        # postgres + redis integration test
 1. **Phase 1** — Tenant auth, plans/customers/payment-methods CRUD (implemented)
 2. **Phase 2** — JWT auth, settings, subscriptions, invoices (per-merchant Nomba credentials) (implemented)
 3. **Phase 3** — Background jobs (billing, dunning) with tenant-scoped Nomba calls (implemented)
-4. **Phase 4** — Outbound webhooks, customer portal, inbound Nomba webhooks
+4. **Phase 4** — Inbound Nomba webhooks, outbound webhooks, customer portal (implemented)
 5. **Phase 5** — Analytics + live Nomba charge swap
 

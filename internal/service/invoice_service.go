@@ -15,18 +15,19 @@ import (
 )
 
 type InvoiceService struct {
-	repo   domain.InvoiceRepository
-	cfg    *config.Config
-	pdf    *pdf.Renderer
-	nomba  *nomba.Client
-	clock  clock.Clock
+	repo     domain.InvoiceRepository
+	cfg      *config.Config
+	pdf      *pdf.Renderer
+	nomba    *nomba.Client
+	clock    clock.Clock
+	webhooks *WebhookService
 }
 
-func NewInvoiceService(repo domain.InvoiceRepository, cfg *config.Config, nombaClient *nomba.Client, clk clock.Clock) *InvoiceService {
+func NewInvoiceService(repo domain.InvoiceRepository, cfg *config.Config, nombaClient *nomba.Client, clk clock.Clock, webhooks *WebhookService) *InvoiceService {
 	if clk == nil {
 		clk = clock.RealClock{}
 	}
-	return &InvoiceService{repo: repo, cfg: cfg, pdf: pdf.NewRenderer(), nomba: nombaClient, clock: clk}
+	return &InvoiceService{repo: repo, cfg: cfg, pdf: pdf.NewRenderer(), nomba: nombaClient, clock: clk, webhooks: webhooks}
 }
 
 func (s *InvoiceService) Get(ctx context.Context, tenantID, id uuid.UUID) (*domain.Invoice, []*domain.InvoiceLineItem, error) {
@@ -71,6 +72,8 @@ func (s *InvoiceService) CreateSubscriptionInvoice(ctx context.Context, tenantID
 		Amount:      plan.Amount,
 		Currency:    plan.Currency,
 	})
+
+	s.emitInvoiceCreated(ctx, tenantID, inv)
 	return inv, nil
 }
 
@@ -118,6 +121,7 @@ func (s *InvoiceService) CreateUpgradeInvoice(ctx context.Context, tenantID uuid
 		})
 	}
 
+	s.emitInvoiceCreated(ctx, tenantID, inv)
 	return inv, nil
 }
 
@@ -154,7 +158,6 @@ func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenan
 	if inv.Status != domain.InvoiceStatusOpen {
 		return nil, fmt.Errorf("%w: only open invoices can be charged", domain.ErrValidation)
 	}
-
 	now := s.clock.Now().UTC()
 	inv.AttemptCount++
 
@@ -196,6 +199,10 @@ func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenan
 			Currency:       nomba.Currency(inv.Currency),
 			AccountID:      tenant.NombaOrderAccountID(),
 			CallbackURL:    "https://subsync.io/billing/callback",
+			OrderMetaData: map[string]string{
+				"invoice_id": inv.ID.String(),
+				"purpose":    "billing_charge",
+			},
 		},
 	})
 	if err != nil {
@@ -209,10 +216,7 @@ func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenan
 		return inv, fmt.Errorf("%w: nomba charge declined: %s", domain.ErrValidation, result.Message)
 	}
 
-	// Phase 4 webhooks finalize payment; until then accept synchronous success from Nomba.
-	inv.Status = domain.InvoiceStatusPaid
-	inv.AmountPaid = inv.AmountDue
-	inv.PaidAt = &now
+	inv.Status = domain.InvoiceStatusProcessing
 	inv.NombaTransactionID = result.Message
 	if err := s.repo.Update(ctx, inv); err != nil {
 		return nil, err
@@ -242,4 +246,20 @@ func (s *InvoiceService) RenderPDF(ctx context.Context, tenantID, id uuid.UUID, 
 
 func (s *InvoiceService) CustomerPaidTotal(ctx context.Context, tenantID, customerID uuid.UUID) (int64, error) {
 	return s.repo.SumPaidByCustomer(ctx, tenantID, customerID)
+}
+
+func (s *InvoiceService) SetWebhooks(webhooks *WebhookService) {
+	s.webhooks = webhooks
+}
+
+func (s *InvoiceService) emitInvoiceCreated(ctx context.Context, tenantID uuid.UUID, inv *domain.Invoice) {
+	if s.webhooks == nil {
+		return
+	}
+	_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventInvoiceCreated, map[string]any{
+		"id":     inv.ID.String(),
+		"status": string(inv.Status),
+		"amount_due": inv.AmountDue,
+		"currency": inv.Currency,
+	})
 }

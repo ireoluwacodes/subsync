@@ -16,6 +16,7 @@ func (r *InvoiceRepo) FindForBillingPeriod(ctx context.Context, tenantID, subscr
 		Where("period_start = ? AND period_end = ?", periodStart, periodEnd).
 		Where("status IN ?", []string{
 			string(domain.InvoiceStatusOpen),
+			string(domain.InvoiceStatusProcessing),
 			string(domain.InvoiceStatusPaid),
 		}).
 		Order("created_at DESC").
@@ -30,6 +31,43 @@ func (r *InvoiceRepo) LatestOpenForSubscription(ctx context.Context, tenantID, s
 	var m models.Invoice
 	err := r.db.WithContext(ctx).
 		Where("tenant_id = ? AND subscription_id = ? AND status = ?", tenantID, subscriptionID, domain.InvoiceStatusOpen).
+		Order("created_at DESC").
+		First(&m).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	return models.InvoiceToDomain(&m), nil
+}
+
+func (r *InvoiceRepo) GetByNombaOrderRef(ctx context.Context, tenantID uuid.UUID, orderRef string) (*domain.Invoice, error) {
+	var m models.Invoice
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND nomba_order_ref = ?", tenantID, orderRef).
+		First(&m).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	return models.InvoiceToDomain(&m), nil
+}
+
+func (r *InvoiceRepo) GetByNombaTransactionID(ctx context.Context, tenantID uuid.UUID, transactionID string) (*domain.Invoice, error) {
+	var m models.Invoice
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND nomba_transaction_id = ?", tenantID, transactionID).
+		First(&m).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	return models.InvoiceToDomain(&m), nil
+}
+
+func (r *InvoiceRepo) GetOpenBySubscription(ctx context.Context, tenantID, subscriptionID uuid.UUID) (*domain.Invoice, error) {
+	var m models.Invoice
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND subscription_id = ? AND status IN ?", tenantID, subscriptionID, []string{
+			string(domain.InvoiceStatusOpen),
+			string(domain.InvoiceStatusProcessing),
+		}).
 		Order("created_at DESC").
 		First(&m).Error
 	if err != nil {

@@ -63,3 +63,7 @@ func GenerateWebhookSecret() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+func GeneratePortalToken() (string, error) {
+	return GenerateResetToken()
+}

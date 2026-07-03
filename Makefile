@@ -1,10 +1,12 @@
-.PHONY: help up down dev run-api run-worker build test lint migrate-up migrate-down migrate-create migrate-status db-create
+.PHONY: help up down dev dev-air run-api run-worker air-api air-worker build test lint migrate-up migrate-down migrate-create migrate-status db-create
 
 # Load .env if present
 ifneq (,$(wildcard .env))
     include .env
     export
 endif
+
+AIR ?= air
 
 DB_HOST ?= localhost
 DB_PORT ?= 5432
@@ -21,8 +23,11 @@ help:
 	@echo "  make down          Stop containers"
 	@echo "  make db-create     Create subsync database (if missing)"
 	@echo "  make dev           up + db-create + migrate-up + run-api"
+	@echo "  make dev-air       up + migrate-up + air-api (live reload)"
 	@echo "  make run-api       Run API server"
+	@echo "  make air-api       Run API with air live reload"
 	@echo "  make run-worker    Run background worker"
+	@echo "  make air-worker    Run worker with air live reload"
 	@echo "  make build         Build api and worker binaries"
 	@echo "  make test          Run unit tests"
 	@echo "  make lint          Run golangci-lint"
@@ -45,11 +50,19 @@ db-create:
 
 dev: up db-create migrate-up run-api
 
+dev-air: up migrate-up air-api
+
 run-api:
 	go run ./cmd/api
 
+air-api:
+	$(AIR) -c .air.toml
+
 run-worker:
 	go run ./cmd/worker
+
+air-worker:
+	$(AIR) -c .air.worker.toml
 
 build:
 	CGO_ENABLED=0 go build -o bin/api ./cmd/api

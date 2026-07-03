@@ -36,7 +36,6 @@ func TestPhase2_E2E(t *testing.T) {
 
 	cfg := &config.Config{
 		AppEnv:                        "development",
-		BootstrapSecret:               "test-bootstrap-secret",
 		PostgresDSN:                   dsn,
 		RedisURL:                      redisURL,
 		JWTSecret:                     "test-jwt-secret",
@@ -78,17 +77,17 @@ func TestPhase2_E2E(t *testing.T) {
 	engine := router.Setup(cfg, database, q, repos, svcs)
 
 	email := "e2e-" + uuid.NewString() + "@example.com"
-	createBody, _ := json.Marshal(map[string]string{
-		"name":                 "E2E Tenant",
-		"email":                email,
-		"nomba_client_id":      "client-id",
-		"nomba_client_secret":  "client-secret",
-		"nomba_account_id":     "acct-merchant",
-		"nomba_env":            "sandbox",
+	registerBody, _ := json.Marshal(map[string]string{
+		"email":               email,
+		"password":            "securepass123",
+		"name":                "E2E Tenant",
+		"nomba_client_id":     "client-id",
+		"nomba_client_secret": "client-secret",
+		"nomba_account_id":    "acct-merchant",
+		"nomba_env":           "sandbox",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewReader(createBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Bootstrap-Secret", "test-bootstrap-secret")
 	w := httptest.NewRecorder()
 	engine.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())

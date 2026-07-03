@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/datatypes"
 )
 
@@ -181,3 +182,58 @@ type PaymentMethod struct {
 }
 
 func (PaymentMethod) TableName() string { return "payment_methods" }
+
+type NombaEvent struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID    uuid.UUID      `gorm:"type:uuid;not null;index"`
+	EventID     string         `gorm:"column:event_id;not null"`
+	EventType   string         `gorm:"column:event_type;not null"`
+	Payload     datatypes.JSON `gorm:"type:jsonb;not null"`
+	Processed   bool           `gorm:"not null;default:false"`
+	ProcessedAt *time.Time     `gorm:"column:processed_at"`
+	Error       *string        `gorm:"type:text"`
+	CreatedAt   time.Time      `gorm:"not null"`
+}
+
+func (NombaEvent) TableName() string { return "nomba_events" }
+
+type WebhookEndpoint struct {
+	ID        uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID  uuid.UUID      `gorm:"type:uuid;not null;index"`
+	URL       string         `gorm:"not null"`
+	Events    pq.StringArray `gorm:"type:text[];not null;default:'{}'"`
+	IsActive  bool           `gorm:"column:is_active;not null;default:true"`
+	CreatedAt time.Time      `gorm:"not null"`
+	UpdatedAt time.Time      `gorm:"not null"`
+}
+
+func (WebhookEndpoint) TableName() string { return "webhook_endpoints" }
+
+type WebhookDelivery struct {
+	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID     uuid.UUID  `gorm:"type:uuid;not null;index"`
+	EndpointID   uuid.UUID  `gorm:"type:uuid;not null;index"`
+	EventType    string     `gorm:"column:event_type;not null"`
+	Payload      datatypes.JSON `gorm:"type:jsonb;not null"`
+	AttemptCount int        `gorm:"column:attempt_count;not null;default:0"`
+	LastStatus   *int       `gorm:"column:last_status"`
+	LastError    *string    `gorm:"column:last_error;type:text"`
+	DeliveredAt  *time.Time `gorm:"column:delivered_at"`
+	NextRetryAt  *time.Time `gorm:"column:next_retry_at"`
+	CreatedAt    time.Time  `gorm:"not null"`
+}
+
+func (WebhookDelivery) TableName() string { return "webhook_deliveries" }
+
+type PortalToken struct {
+	ID             uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID       uuid.UUID  `gorm:"type:uuid;not null;index"`
+	SubscriptionID uuid.UUID  `gorm:"type:uuid;not null"`
+	CustomerID     uuid.UUID  `gorm:"type:uuid;not null"`
+	TokenHash      string     `gorm:"column:token_hash;not null;uniqueIndex"`
+	ExpiresAt      time.Time  `gorm:"not null"`
+	UsedAt         *time.Time `gorm:"column:used_at"`
+	CreatedAt      time.Time  `gorm:"not null"`
+}
+
+func (PortalToken) TableName() string { return "portal_tokens" }

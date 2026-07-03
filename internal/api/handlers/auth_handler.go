@@ -3,15 +3,17 @@ package handlers
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/ireoluwacodes/subsync/internal/api/dto"
+	"github.com/ireoluwacodes/subsync/internal/config"
 	"github.com/ireoluwacodes/subsync/internal/service"
 )
 
 type AuthHandler struct {
+	cfg *config.Config
 	svc *service.AuthService
 }
 
-func NewAuthHandler(svc *service.AuthService) *AuthHandler {
-	return &AuthHandler{svc: svc}
+func NewAuthHandler(cfg *config.Config, svc *service.AuthService) *AuthHandler {
+	return &AuthHandler{cfg: cfg, svc: svc}
 }
 
 type registerRequest struct {
@@ -49,6 +51,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	setRefreshTokenCookie(c, h.cfg, result.RefreshToken)
+
 	dto.RespondCreated(c, gin.H{
 		"user":          dto.UserToResponse(result.User),
 		"tenant":        dto.TenantToResponse(result.Tenant, false),
@@ -78,6 +82,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	setRefreshTokenCookie(c, h.cfg, result.RefreshToken)
+
 	dto.RespondOK(c, gin.H{
 		"user":          dto.UserToResponse(result.User),
 		"tenant":        dto.TenantToResponse(result.Tenant, false),
@@ -88,22 +94,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-type refreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
-
 func (h *AuthHandler) Refresh(c *gin.Context) {
-	var req refreshRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		dto.RespondError(c, dto.NewBindError("invalid request body"))
+	refreshToken := refreshTokenFromRequest(c)
+	if refreshToken == "" {
+		dto.RespondError(c, dto.NewBindError("refresh_token required (cookie or query)"))
 		return
 	}
 
-	result, err := h.svc.Refresh(c.Request.Context(), req.RefreshToken)
+	result, err := h.svc.Refresh(c.Request.Context(), refreshToken)
 	if err != nil {
 		dto.RespondError(c, err)
 		return
 	}
+
+	setRefreshTokenCookie(c, h.cfg, result.RefreshToken)
 
 	dto.RespondOK(c, gin.H{
 		"access_token":  result.AccessToken,
@@ -121,6 +125,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		dto.RespondError(c, err)
 		return
 	}
+	clearRefreshTokenCookie(c)
 	dto.RespondOK(c, gin.H{"ok": true})
 }
 

@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/ireoluwacodes/subsync/internal/api/handlers"
 	"github.com/ireoluwacodes/subsync/internal/api/middleware"
 )
 
@@ -27,7 +28,6 @@ func SetupRouter(deps Dependencies) *gin.Engine {
 
 	api := r.Group(V1Prefix)
 
-	RegisterTenantPublicRoutes(api, deps.TenantHandler)
 	RegisterAuthPublicRoutes(api, deps.AuthHandler)
 
 	protected := api.Group("", middleware.Auth(deps.Repos.Tenants, deps.AuthService, deps.Queue.Redis()), middleware.Tenant())
@@ -45,7 +45,12 @@ func SetupRouter(deps Dependencies) *gin.Engine {
 	RegisterAnalyticsRoutes(protected, deps.AnalyticsHandler)
 	RegisterPortalAPIRoutes(protected, deps.PortalHandler)
 
+	RegisterNombaWebhookRoutes(r, deps.NombaWebhookHandler)
 	RegisterPortalPublicRoutes(r, deps.PortalHandler)
 
 	return r
+}
+
+func RegisterNombaWebhookRoutes(r *gin.Engine, h *handlers.NombaWebhookHandler) {
+	r.POST("/webhooks/nomba/:tenant_id", h.Receive)
 }

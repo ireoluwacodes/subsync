@@ -16,6 +16,7 @@ type SubscriptionService struct {
 	plans     domain.PlanRepository
 	customers domain.CustomerRepository
 	invoices  *InvoiceService
+	webhooks  *WebhookService
 }
 
 func NewSubscriptionService(
@@ -23,8 +24,9 @@ func NewSubscriptionService(
 	plans domain.PlanRepository,
 	customers domain.CustomerRepository,
 	invoices *InvoiceService,
+	webhooks *WebhookService,
 ) *SubscriptionService {
-	return &SubscriptionService{repo: repo, plans: plans, customers: customers, invoices: invoices}
+	return &SubscriptionService{repo: repo, plans: plans, customers: customers, invoices: invoices, webhooks: webhooks}
 }
 
 type CreateSubscriptionInput struct {
@@ -78,6 +80,13 @@ func (s *SubscriptionService) Create(ctx context.Context, tenantID uuid.UUID, in
 		Actor:          "system",
 		Metadata:       map[string]any{},
 	})
+
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventSubscriptionCreated, map[string]any{
+			"id":    sub.ID.String(),
+			"state": string(sub.State),
+		})
+	}
 
 	return sub, nil
 }
@@ -297,6 +306,16 @@ func (s *SubscriptionService) applyTransition(ctx context.Context, sub *domain.S
 	}
 	if err := s.repo.Transition(ctx, sub, tr); err != nil {
 		return nil, err
+	}
+	if s.webhooks != nil && from != to {
+		event := domain.WebhookEventSubscriptionUpdated
+		if to == domain.SubscriptionStateCanceled {
+			event = domain.WebhookEventSubscriptionCanceled
+		}
+		_ = s.webhooks.Emit(ctx, sub.TenantID, event, map[string]any{
+			"id":    sub.ID.String(),
+			"state": string(sub.State),
+		})
 	}
 	return sub, nil
 }
