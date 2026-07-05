@@ -16,6 +16,7 @@ type Repos struct {
 	Webhooks       *WebhookRepo
 	NombaEvents    *NombaEventRepo
 	PortalTokens   *PortalTokenRepo
+	Analytics      *AnalyticsRepo
 }
 
 func NewRepos(database *DB, enc *crypto.CredentialEncryptor) *Repos {
@@ -31,5 +32,6 @@ func NewRepos(database *DB, enc *crypto.CredentialEncryptor) *Repos {
 		Webhooks:       NewWebhookRepo(database),
 		NombaEvents:    NewNombaEventRepo(database),
 		PortalTokens:   NewPortalTokenRepo(database),
+		Analytics:      NewAnalyticsRepo(database),
 	}
 }
