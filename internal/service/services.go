@@ -61,6 +61,6 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 		Webhooks:       webhooks,
 		Portal:         portal,
 		NombaEvents:    nombaEvents,
-		Analytics:      NewAnalyticsService(),
+		Analytics:      NewAnalyticsService(repos.Analytics, clk),
 	}
 }
