@@ -8,4 +8,6 @@ const (
 	TaskSubscriptionResume    = "subscription:resume"
 	TaskWebhookDeliver        = "webhook:deliver"
 	TaskInvoicePDF            = "invoice:pdf"
+	TaskBillingReconcile         = "billing:reconcile_processing"
+	TaskPaymentMethodReminders   = "billing:payment_method_reminders"
 )

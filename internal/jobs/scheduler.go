@@ -11,7 +11,9 @@ func RegisterPeriodicTasks(scheduler *asynq.Scheduler) error {
 		task string
 	}{
 		{"*/5 * * * *", TaskBillingChargeDue},
+		{"*/15 * * * *", TaskBillingReconcile},
 		{"0 * * * *", TaskTrialConvert},
+		{"0 * * * *", TaskPaymentMethodReminders},
 		{"0 * * * *", TaskSubscriptionExpire},
 		{"0 * * * *", TaskSubscriptionResume},
 	}

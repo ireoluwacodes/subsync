@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ireoluwacodes/subsync/internal/clock"
 	"github.com/ireoluwacodes/subsync/internal/config"
 	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
-	"github.com/ireoluwacodes/subsync/internal/clock"
 	"github.com/ireoluwacodes/subsync/internal/pdf"
 	"github.com/ireoluwacodes/subsync/internal/utils"
 )
@@ -47,7 +48,21 @@ func (s *InvoiceService) List(ctx context.Context, tenantID uuid.UUID, filter do
 }
 
 func (s *InvoiceService) CreateSubscriptionInvoice(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, plan *domain.Plan) (*domain.Invoice, error) {
+	return s.createSubscriptionInvoice(ctx, tenantID, sub, plan, nil)
+}
+
+func (s *InvoiceService) CreateSubscriptionCheckoutInvoice(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, plan *domain.Plan) (*domain.Invoice, error) {
+	return s.createSubscriptionInvoice(ctx, tenantID, sub, plan, map[string]any{
+		"purpose": domain.InvoicePurposeSubscriptionCheckout,
+	})
+}
+
+func (s *InvoiceService) createSubscriptionInvoice(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, plan *domain.Plan, metadata map[string]any) (*domain.Invoice, error) {
 	now := s.clock.Now().UTC()
+	meta := map[string]any{}
+	for k, v := range metadata {
+		meta[k] = v
+	}
 	inv := &domain.Invoice{
 		TenantID:       tenantID,
 		SubscriptionID: sub.ID,
@@ -59,7 +74,7 @@ func (s *InvoiceService) CreateSubscriptionInvoice(ctx context.Context, tenantID
 		PeriodEnd:      sub.CurrentPeriodEnd,
 		DueDate:        &now,
 		NombaOrderRef:  uuid.New().String(),
-		Metadata:       map[string]any{},
+		Metadata:       meta,
 	}
 	if err := s.repo.Create(ctx, inv); err != nil {
 		return nil, err
@@ -147,14 +162,14 @@ func (s *InvoiceService) Charge(ctx context.Context, tenantID, id uuid.UUID) (*d
 	if err != nil {
 		return nil, err
 	}
-	return s.chargeInvoice(ctx, nil, nil, inv)
+	return s.chargeInvoice(ctx, nil, nil, inv, "")
 }
 
-func (s *InvoiceService) ChargeWithPayment(ctx context.Context, tenant *domain.Tenant, pm *domain.PaymentMethod, inv *domain.Invoice) (*domain.Invoice, error) {
-	return s.chargeInvoice(ctx, tenant, pm, inv)
+func (s *InvoiceService) ChargeWithPayment(ctx context.Context, tenant *domain.Tenant, pm *domain.PaymentMethod, inv *domain.Invoice, customerEmail string) (*domain.Invoice, error) {
+	return s.chargeInvoice(ctx, tenant, pm, inv, customerEmail)
 }
 
-func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenant, pm *domain.PaymentMethod, inv *domain.Invoice) (*domain.Invoice, error) {
+func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenant, pm *domain.PaymentMethod, inv *domain.Invoice, customerEmail string) (*domain.Invoice, error) {
 	if inv.Status != domain.InvoiceStatusOpen {
 		return nil, fmt.Errorf("%w: only open invoices can be charged", domain.ErrValidation)
 	}
@@ -190,15 +205,16 @@ func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenan
 		return nil, fmt.Errorf("%w: payment method missing token", domain.ErrValidation)
 	}
 
+	callbackURL := billingCallbackURL(s.cfg)
 	result, err := s.nomba.TokenizedCardPayment(ctx, tenant, nomba.TokenizedCardPaymentRequest{
 		TokenKey: pm.TokenKey,
 		Order: nomba.Order{
 			OrderReference: inv.NombaOrderRef,
-			CustomerEmail:  "",
+			CustomerEmail:  customerEmail,
 			Amount:         float64(inv.AmountDue) / 100.0,
 			Currency:       nomba.Currency(inv.Currency),
 			AccountID:      tenant.NombaOrderAccountID(),
-			CallbackURL:    "https://subsync.io/billing/callback",
+			CallbackURL:    callbackURL,
 			OrderMetaData: map[string]string{
 				"invoice_id": inv.ID.String(),
 				"purpose":    "billing_charge",
@@ -250,6 +266,13 @@ func (s *InvoiceService) CustomerPaidTotal(ctx context.Context, tenantID, custom
 
 func (s *InvoiceService) SetWebhooks(webhooks *WebhookService) {
 	s.webhooks = webhooks
+}
+
+func billingCallbackURL(cfg *config.Config) string {
+	if cfg == nil || cfg.PublicBaseURL == "" {
+		return "https://subsync.io/billing/callback"
+	}
+	return strings.TrimRight(cfg.PublicBaseURL, "/") + "/billing/callback"
 }
 
 func (s *InvoiceService) emitInvoiceCreated(ctx context.Context, tenantID uuid.UUID, inv *domain.Invoice) {

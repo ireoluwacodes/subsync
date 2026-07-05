@@ -109,6 +109,19 @@ func (s *NombaEventService) handlePaymentSuccess(ctx context.Context, tenantID u
 	if err != nil {
 		return err
 	}
+
+	if inv != nil && IsSubscriptionCheckoutInvoice(inv) {
+		return s.billing.CompleteCheckoutFromWebhook(ctx, tenantID, inv, tx.TokenKey, tx.TransactionID, tx)
+	}
+
+	if subID, ok := ParseCheckoutSubscriptionID(orderRef); ok {
+		return s.billing.CompleteTrialCheckoutFromWebhook(ctx, tenantID, subID, tx.TokenKey, tx.TransactionID, tx)
+	}
+
+	if subID, ok := ParseCardCaptureSubscriptionID(orderRef); ok {
+		return s.billing.CompleteCardCaptureFromWebhook(ctx, tenantID, subID, tx.TokenKey, tx)
+	}
+
 	if inv == nil && orderRef == "" {
 		return nil
 	}

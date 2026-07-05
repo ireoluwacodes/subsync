@@ -17,6 +17,7 @@ type SubscriptionService struct {
 	customers domain.CustomerRepository
 	invoices  *InvoiceService
 	webhooks  *WebhookService
+	billing   *BillingService
 }
 
 func NewSubscriptionService(
@@ -27,6 +28,10 @@ func NewSubscriptionService(
 	webhooks *WebhookService,
 ) *SubscriptionService {
 	return &SubscriptionService{repo: repo, plans: plans, customers: customers, invoices: invoices, webhooks: webhooks}
+}
+
+func (s *SubscriptionService) SetBilling(billing *BillingService) {
+	s.billing = billing
 }
 
 type CreateSubscriptionInput struct {
@@ -86,6 +91,22 @@ func (s *SubscriptionService) Create(ctx context.Context, tenantID uuid.UUID, in
 			"id":    sub.ID.String(),
 			"state": string(sub.State),
 		})
+	}
+
+	if in.PaymentMethodID != nil && plan.TrialDays == 0 && s.billing != nil {
+		now := time.Now().UTC()
+		sub.NextBillingAt = &now
+		if err := s.repo.Update(ctx, sub); err != nil {
+			return nil, err
+		}
+		if err := s.billing.ChargeDueSubscription(ctx, tenantID, sub.ID); err != nil {
+			return nil, err
+		}
+		updated, err := s.repo.GetByID(ctx, tenantID, sub.ID)
+		if err != nil {
+			return nil, err
+		}
+		return updated, nil
 	}
 
 	return sub, nil

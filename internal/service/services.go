@@ -25,6 +25,7 @@ type Services struct {
 	Portal         *PortalService
 	NombaEvents    *NombaEventService
 	Analytics      *AnalyticsService
+	Checkout       *SubscriptionCheckoutService
 }
 
 func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client, jwt *auth.JWTService, q *queue.Queue) *Services {
@@ -44,7 +45,11 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 
 	tenants := NewTenantService(repos.Tenants, nombaClient)
 	billing := NewBillingService(cfg, clk, repos, invoices, subs, mailer, publisher, webhooks)
+	billing.SetPaymentMethods(paymentMethods)
+	subs.SetBilling(billing)
 	portal := NewPortalService(clk, repos, subs, paymentMethods, nombaClient, cfg, cfg.PublicBaseURL, webhooks)
+	billing.SetPortal(portal)
+	checkout := NewSubscriptionCheckoutService(cfg, clk, repos, invoices, subs, nombaClient, mailer, webhooks)
 	nombaEvents := NewNombaEventService(clk, repos, billing, webhooks, portal)
 
 	return &Services{
@@ -57,10 +62,11 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 		Invoices:       invoices,
 		Subscriptions:  subs,
 		Billing:        billing,
-		Dunning:        NewDunningService(clk, repos, invoices, subs, nombaClient, mailer, publisher),
+		Dunning:        NewDunningService(clk, repos, invoices, subs, billing, nombaClient, mailer, publisher, cfg),
 		Webhooks:       webhooks,
 		Portal:         portal,
 		NombaEvents:    nombaEvents,
 		Analytics:      NewAnalyticsService(repos.Analytics, clk),
+		Checkout:       checkout,
 	}
 }

@@ -207,6 +207,84 @@ func SubscriptionConfirmedHTML(tenantName string, amount int64, currency string)
 	return subject, htmlOut
 }
 
+func CheckoutLinkHTML(tenantName, planName string, amount float64, currency, checkoutURL string) (subject, htmlOut string) {
+	subject = fmt.Sprintf("Complete your %s subscription", planName)
+	tenant := html.EscapeString(tenantName)
+	plan := html.EscapeString(planName)
+	link := html.EscapeString(checkoutURL)
+	body := fmt.Sprintf(
+		`<p style="margin:0;">You're almost subscribed to <strong style="color:%s;">%s</strong> on <strong>%s</strong>.</p>
+		<p style="margin:16px 0 0;">Amount due: <strong>%s %s</strong></p>
+		<p style="margin:24px 0 0;"><a href="%s" style="display:inline-block;padding:12px 20px;background:%s;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Complete checkout</a></p>
+		<p style="margin:16px 0 0;font-size:13px;color:%s;">If the button doesn't work, copy this link: %s</p>`,
+		colorText, plan, tenant, fmt.Sprintf("%.2f", amount), html.EscapeString(currency), link, colorAccent, colorMuted, link,
+	)
+	htmlOut = emailLayout(layoutOpts{
+		eyebrow: "Subscription checkout",
+		heading: "Complete your subscription",
+		body:    body,
+	})
+	return subject, htmlOut
+}
+
+func PaymentMethodCaptureRequiredHTML(tenantName, planName, captureURL string) (subject, htmlOut string) {
+	subject = "Add a card for subscription renewals"
+	tenant := html.EscapeString(tenantName)
+	planLine := ""
+	if planName != "" {
+		planLine = fmt.Sprintf(` for <strong style="color:%s;">%s</strong>`, colorText, html.EscapeString(planName))
+	}
+	body := fmt.Sprintf(
+		`<p style="margin:0;">Your first payment with <strong style="color:%s;">%s</strong>%s was received via bank transfer.</p>
+		<p style="margin:16px 0 0;">Add a debit or credit card before your next billing date so renewals can run automatically. A small card verification charge (₦100) may apply.</p>`,
+		colorText, tenant, planLine,
+	)
+	opts := layoutOpts{
+		eyebrow: "Action required",
+		heading: "Save a card for renewals",
+		body:    body,
+		accent:  colorWarn,
+	}
+	if captureURL != "" {
+		opts.ctaLabel = "Add payment card"
+		opts.ctaURL = captureURL
+	}
+	htmlOut = emailLayout(opts)
+	return subject, htmlOut
+}
+
+func PaymentMethodCaptureReminderHTML(tenantName, planName, captureURL string, daysUntilBilling int) (subject, htmlOut string) {
+	subject = "Add a card before your subscription renews"
+	tenant := html.EscapeString(tenantName)
+	planLine := ""
+	if planName != "" {
+		planLine = fmt.Sprintf(` for <strong style="color:%s;">%s</strong>`, colorText, html.EscapeString(planName))
+	}
+	when := "soon"
+	if daysUntilBilling == 1 {
+		when = "tomorrow"
+	} else if daysUntilBilling > 1 {
+		when = fmt.Sprintf("in %d days", daysUntilBilling)
+	}
+	body := fmt.Sprintf(
+		`<p style="margin:0;">Your subscription with <strong style="color:%s;">%s</strong>%s renews %s, but no card is saved for automatic billing.</p>
+		<p style="margin:16px 0 0;">Add a debit or credit card now to keep your subscription active. Without a card on file, the subscription will be canceled on the renewal date.</p>`,
+		colorText, tenant, planLine, when,
+	)
+	opts := layoutOpts{
+		eyebrow: "Action required",
+		heading: "Save a card for renewals",
+		body:    body,
+		accent:  colorWarn,
+	}
+	if captureURL != "" {
+		opts.ctaLabel = "Add payment card"
+		opts.ctaURL = captureURL
+	}
+	htmlOut = emailLayout(opts)
+	return subject, htmlOut
+}
+
 func PasswordResetOTPHTML(otp string) (subject, htmlOut string) {
 	subject = "Your SubSync password reset code"
 	body := fmt.Sprintf(

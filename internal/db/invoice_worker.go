@@ -75,3 +75,24 @@ func (r *InvoiceRepo) GetOpenBySubscription(ctx context.Context, tenantID, subsc
 	}
 	return models.InvoiceToDomain(&m), nil
 }
+
+func (r *InvoiceRepo) ListProcessingBefore(ctx context.Context, before time.Time, limit int) ([]*domain.Invoice, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var rows []models.Invoice
+	err := r.db.WithContext(ctx).
+		Where("status = ?", domain.InvoiceStatusProcessing).
+		Where("updated_at < ?", before).
+		Order("updated_at ASC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Invoice, len(rows))
+	for i := range rows {
+		out[i] = models.InvoiceToDomain(&rows[i])
+	}
+	return out, nil
+}

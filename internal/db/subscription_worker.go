@@ -99,6 +99,31 @@ func (r *SubscriptionRepo) ListResumingFromPause(ctx context.Context, before tim
 	return out, nil
 }
 
+func (r *SubscriptionRepo) ListAwaitingPaymentMethodBeforeBilling(ctx context.Context, now time.Time, limit int) ([]*domain.Subscription, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var rows []models.Subscription
+	err := r.db.WithContext(ctx).
+		Where("state IN ?", []string{
+			string(domain.SubscriptionStateActive),
+			string(domain.SubscriptionStateTrialing),
+		}).
+		Where("payment_method_id IS NULL").
+		Where("next_billing_at IS NOT NULL AND next_billing_at > ?", now).
+		Order("next_billing_at ASC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Subscription, len(rows))
+	for i := range rows {
+		out[i] = models.SubscriptionToDomain(&rows[i])
+	}
+	return out, nil
+}
+
 func (r *SubscriptionRepo) ListPastDueForDunning(ctx context.Context, limit int) ([]*domain.Subscription, error) {
 	if limit <= 0 {
 		limit = 50

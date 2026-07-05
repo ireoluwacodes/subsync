@@ -36,7 +36,12 @@ func NewHandlers(ctx context.Context, cfg *config.Config, log *zap.Logger, datab
 	invoices.SetWebhooks(webhooks)
 	subs := service.NewSubscriptionService(repos.Subscriptions, repos.Plans, repos.Customers, invoices, webhooks)
 	billing := service.NewBillingService(cfg, clk, repos, invoices, subs, mailer, q.Client, webhooks)
-	dunning := service.NewDunningService(clk, repos, invoices, subs, nombaClient, mailer, q.Client)
+	paymentMethods := service.NewPaymentMethodService(repos.PaymentMethods, repos.Customers, webhooks)
+	billing.SetPaymentMethods(paymentMethods)
+	subs.SetBilling(billing)
+	portal := service.NewPortalService(clk, repos, subs, paymentMethods, nombaClient, cfg, cfg.PublicBaseURL, webhooks)
+	billing.SetPortal(portal)
+	dunning := service.NewDunningService(clk, repos, invoices, subs, billing, nombaClient, mailer, q.Client, cfg)
 
 	return &Handlers{
 		Config:   cfg,

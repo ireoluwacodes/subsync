@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/email"
+	"github.com/ireoluwacodes/subsync/internal/nomba"
 	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
@@ -26,14 +28,16 @@ type TaskPublisher interface {
 }
 
 type BillingService struct {
-	cfg       *config.Config
-	clock     clock.Clock
-	repos     *db.Repos
-	invoices  *InvoiceService
-	subs      *SubscriptionService
-	mailer    *email.MailerService
-	publisher TaskPublisher
-	webhooks  *WebhookService
+	cfg            *config.Config
+	clock          clock.Clock
+	repos          *db.Repos
+	invoices       *InvoiceService
+	subs           *SubscriptionService
+	paymentMethods *PaymentMethodService
+	mailer         *email.MailerService
+	publisher      TaskPublisher
+	webhooks       *WebhookService
+	portal         *PortalService
 }
 
 func NewBillingService(
@@ -61,6 +65,14 @@ func NewBillingService(
 	}
 }
 
+func (s *BillingService) SetPaymentMethods(paymentMethods *PaymentMethodService) {
+	s.paymentMethods = paymentMethods
+}
+
+func (s *BillingService) SetPortal(portal *PortalService) {
+	s.portal = portal
+}
+
 type jobPayload struct {
 	TenantID       uuid.UUID `json:"tenant_id"`
 	SubscriptionID uuid.UUID `json:"subscription_id,omitempty"`
@@ -80,6 +92,59 @@ func (s *BillingService) ProcessDueSubscriptions(ctx context.Context, limit int)
 		processed++
 	}
 	return processed, nil
+}
+
+func (s *BillingService) ProcessPaymentMethodReminders(ctx context.Context, limit int) (int, error) {
+	subs, err := s.repos.Subscriptions.ListAwaitingPaymentMethodBeforeBilling(ctx, s.clock.Now().UTC(), limit)
+	if err != nil {
+		return 0, err
+	}
+	sent := 0
+	for _, sub := range subs {
+		if sub.PaymentMethodID != nil {
+			continue
+		}
+		billingAt := sub.NextBillingAt
+		if billingAt == nil {
+			continue
+		}
+		now := s.clock.Now().UTC()
+		if !billingAt.After(now) {
+			continue
+		}
+		hoursUntil := billingAt.Sub(now)
+		due := pmRemindersDue(sub, hoursUntil)
+		if len(due) == 0 {
+			continue
+		}
+
+		tenant, err := s.repos.Tenants.GetByID(ctx, sub.TenantID)
+		if err != nil {
+			continue
+		}
+		customer, err := s.repos.Customers.GetByID(ctx, sub.TenantID, sub.CustomerID)
+		if err != nil {
+			continue
+		}
+		plan, err := s.repos.Plans.GetByID(ctx, sub.TenantID, sub.PlanID)
+		if err != nil {
+			continue
+		}
+
+		daysUntil := int(hoursUntil.Hours() / 24)
+		if daysUntil < 1 {
+			daysUntil = 1
+		}
+		s.sendPaymentMethodCaptureReminder(ctx, tenant, customer, sub, plan, daysUntil)
+		for _, key := range due {
+			markPMReminderSent(sub, key)
+		}
+		if err := s.repos.Subscriptions.Update(ctx, sub); err != nil {
+			continue
+		}
+		sent++
+	}
+	return sent, nil
 }
 
 func (s *BillingService) ChargeDueSubscription(ctx context.Context, tenantID, subscriptionID uuid.UUID) error {
@@ -115,6 +180,13 @@ func (s *BillingService) ChargeDueSubscription(ctx context.Context, tenantID, su
 
 	pm, err := s.resolvePaymentMethod(ctx, tenantID, sub, customer.ID)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			tenant, tErr := s.repos.Tenants.GetByID(ctx, tenantID)
+			if tErr != nil {
+				return tErr
+			}
+			return s.handleRenewalWithoutPaymentMethod(ctx, tenant, customer, sub, plan, inv)
+		}
 		return err
 	}
 
@@ -126,19 +198,24 @@ func (s *BillingService) ChargeDueSubscription(ctx context.Context, tenantID, su
 		return err
 	}
 
-	charged, chargeErr := s.invoices.ChargeWithPayment(ctx, tenant, pm, inv)
+	charged, chargeErr := s.invoices.ChargeWithPayment(ctx, tenant, pm, inv, customer.Email)
+	return s.ApplyChargeOutcome(ctx, tenant, customer, sub, plan, charged, chargeErr)
+}
+
+// ApplyChargeOutcome handles sync mock success, async processing, or charge failure.
+func (s *BillingService) ApplyChargeOutcome(ctx context.Context, tenant *domain.Tenant, customer *domain.Customer, sub *domain.Subscription, plan *domain.Plan, charged *domain.Invoice, chargeErr error) error {
 	if chargeErr != nil {
 		return s.handleChargeFailure(ctx, tenant, customer, sub, charged, chargeErr)
 	}
-
-	if charged.Status == domain.InvoiceStatusProcessing {
+	if charged != nil && charged.Status == domain.InvoiceStatusProcessing {
 		return nil
 	}
+	return s.CompleteSuccessfulCharge(ctx, tenant, customer, sub, plan, charged)
+}
 
-	if err := s.handleChargeSuccess(ctx, tenant, customer, sub, plan, charged); err != nil {
-		return err
-	}
-	return nil
+// CompleteSuccessfulCharge advances the subscription after a confirmed (sync or webhook) payment.
+func (s *BillingService) CompleteSuccessfulCharge(ctx context.Context, tenant *domain.Tenant, customer *domain.Customer, sub *domain.Subscription, plan *domain.Plan, inv *domain.Invoice) error {
+	return s.handleChargeSuccess(ctx, tenant, customer, sub, plan, inv)
 }
 
 func (s *BillingService) resolvePaymentMethod(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, customerID uuid.UUID) (*domain.PaymentMethod, error) {
@@ -344,4 +421,328 @@ func (s *BillingService) HandleWebhookPaymentFailure(ctx context.Context, tenant
 		})
 	}
 	return err
+}
+
+// CompleteCheckoutFromWebhook activates an incomplete subscription after Nomba checkout payment.
+func (s *BillingService) CompleteCheckoutFromWebhook(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	inv *domain.Invoice,
+	tokenKey, transactionID string,
+	tx nomba.WebhookTransaction,
+) error {
+	if inv == nil {
+		return fmt.Errorf("%w: checkout invoice required", domain.ErrValidation)
+	}
+	sub, err := s.repos.Subscriptions.GetByID(ctx, tenantID, inv.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	if sub.State != domain.SubscriptionStateIncomplete {
+		return nil
+	}
+	plan, err := s.repos.Plans.GetByID(ctx, tenantID, sub.PlanID)
+	if err != nil {
+		return err
+	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	customer, err := s.repos.Customers.GetByID(ctx, tenantID, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	now := s.clock.Now().UTC()
+	inv.Status = domain.InvoiceStatusPaid
+	inv.AmountPaid = inv.AmountDue
+	inv.PaidAt = &now
+	if transactionID != "" {
+		inv.NombaTransactionID = transactionID
+	}
+	if err := s.repos.Invoices.Update(ctx, inv); err != nil {
+		return err
+	}
+
+	if err := s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, inv, &tokenKey, transactionID, tx); err != nil {
+		return err
+	}
+
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventInvoicePaid, map[string]any{
+			"id":          inv.ID.String(),
+			"status":      string(inv.Status),
+			"amount_paid": inv.AmountPaid,
+			"currency":    inv.Currency,
+		})
+	}
+	return nil
+}
+
+// CompleteTrialCheckoutFromWebhook tokenizes a card and starts a trialing subscription.
+func (s *BillingService) CompleteTrialCheckoutFromWebhook(
+	ctx context.Context,
+	tenantID, subscriptionID uuid.UUID,
+	tokenKey, transactionID string,
+	tx nomba.WebhookTransaction,
+) error {
+	sub, err := s.repos.Subscriptions.GetByID(ctx, tenantID, subscriptionID)
+	if err != nil {
+		return err
+	}
+	if sub.State != domain.SubscriptionStateIncomplete {
+		return nil
+	}
+	plan, err := s.repos.Plans.GetByID(ctx, tenantID, sub.PlanID)
+	if err != nil {
+		return err
+	}
+	if plan.TrialDays <= 0 {
+		return fmt.Errorf("%w: subscription is not a trial checkout", domain.ErrValidation)
+	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	customer, err := s.repos.Customers.GetByID(ctx, tenantID, sub.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	return s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, nil, &tokenKey, transactionID, tx)
+}
+
+func (s *BillingService) activateCheckoutSubscription(
+	ctx context.Context,
+	tenant *domain.Tenant,
+	customer *domain.Customer,
+	sub *domain.Subscription,
+	plan *domain.Plan,
+	inv *domain.Invoice,
+	tokenKey *string,
+	transactionID string,
+	tx nomba.WebhookTransaction,
+) error {
+	key := ""
+	if tokenKey != nil {
+		key = *tokenKey
+	}
+	if key == "" {
+		key = tx.TokenKey
+	}
+
+	transferPaid := key == "" && nomba.IsTransferTransaction(tx)
+	if key == "" && !transferPaid {
+		return fmt.Errorf("%w: missing tokenKey for card checkout", domain.ErrValidation)
+	}
+
+	from := sub.State
+	sub.DunningStep = 0
+	sub.DunningStartedAt = nil
+
+	if key != "" {
+		if s.paymentMethods == nil {
+			return fmt.Errorf("%w: payment method service not configured", domain.ErrValidation)
+		}
+		cardLast4, cardBrand := cardDetailsFromTransaction(tx)
+		pm, err := s.paymentMethods.Create(ctx, sub.TenantID, CreatePaymentMethodInput{
+			CustomerID: sub.CustomerID,
+			Type:       domain.PaymentMethodTokenizedCard,
+			TokenKey:   key,
+			CardLast4:  cardLast4,
+			CardBrand:  cardBrand,
+			IsDefault:  true,
+		})
+		if err != nil {
+			return err
+		}
+		sub.PaymentMethodID = &pm.ID
+		setSubscriptionMeta(sub, domain.SubscriptionMetaAwaitingPaymentMethod, nil)
+		clearPMReminderMetadata(sub)
+	} else {
+		setSubscriptionMeta(sub, domain.SubscriptionMetaAwaitingPaymentMethod, true)
+	}
+
+	if plan.TrialDays > 0 {
+		sub.State = domain.SubscriptionStateTrialing
+		if sub.TrialEndsAt == nil {
+			trialEnd := s.clock.Now().UTC().AddDate(0, 0, plan.TrialDays)
+			sub.TrialEndsAt = &trialEnd
+		}
+		sub.NextBillingAt = sub.TrialEndsAt
+	} else {
+		sub.State = domain.SubscriptionStateActive
+		sub.NextBillingAt = &sub.CurrentPeriodEnd
+	}
+
+	if err := s.repos.Subscriptions.Update(ctx, sub); err != nil {
+		return err
+	}
+
+	reason := "checkout_completed"
+	if transferPaid {
+		reason = "checkout_completed_transfer"
+	}
+	_ = s.repos.Subscriptions.RecordTransition(ctx, &domain.SubscriptionTransition{
+		SubscriptionID: sub.ID,
+		TenantID:       sub.TenantID,
+		FromState:      from,
+		ToState:        sub.State,
+		Reason:         reason,
+		Actor:          "system",
+		Metadata:       map[string]any{},
+	})
+
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(ctx, sub.TenantID, domain.WebhookEventSubscriptionUpdated, map[string]any{
+			"id":    sub.ID.String(),
+			"state": string(sub.State),
+		})
+	}
+
+	if inv != nil && inv.Status == domain.InvoiceStatusPaid {
+		subject, html := email.SubscriptionConfirmedHTML(tenant.Name, inv.AmountPaid, inv.Currency)
+		_ = s.mailer.Send(ctx, customer.Email, subject, html)
+		s.enqueueInvoicePDF(ctx, tenant.ID, inv.ID)
+	}
+
+	if transferPaid {
+		s.sendPaymentMethodCaptureRequiredEmail(ctx, tenant, customer, sub, plan)
+	}
+
+	_ = transactionID
+	return nil
+}
+
+func cardDetailsFromTransaction(tx nomba.WebhookTransaction) (last4, brand string) {
+	_ = tx
+	return "", ""
+}
+
+func (s *BillingService) handleRenewalWithoutPaymentMethod(
+	ctx context.Context,
+	tenant *domain.Tenant,
+	customer *domain.Customer,
+	sub *domain.Subscription,
+	plan *domain.Plan,
+	inv *domain.Invoice,
+) error {
+	if inv != nil && inv.Status == domain.InvoiceStatusOpen {
+		if _, err := s.invoices.Void(ctx, tenant.ID, inv.ID); err != nil {
+			return err
+		}
+	}
+
+	if _, err := s.subs.Cancel(ctx, tenant.ID, sub.ID, CancelInput{
+		CancelAtPeriodEnd: false,
+		Reason:            "no_payment_method_at_renewal",
+	}, "system"); err != nil {
+		return err
+	}
+
+	_ = customer
+	_ = plan
+	return nil
+}
+
+func (s *BillingService) sendPaymentMethodCaptureRequiredEmail(
+	ctx context.Context,
+	tenant *domain.Tenant,
+	customer *domain.Customer,
+	sub *domain.Subscription,
+	plan *domain.Plan,
+) {
+	if s.mailer == nil {
+		return
+	}
+	captureURL := ""
+	if s.portal != nil {
+		if link, err := s.portal.CreatePaymentMethodCaptureLink(ctx, tenant.ID, sub.ID); err == nil {
+			captureURL = link
+		}
+	}
+	subject, html := email.PaymentMethodCaptureRequiredHTML(tenant.Name, plan.Name, captureURL)
+	_ = s.mailer.Send(ctx, customer.Email, subject, html)
+}
+
+func (s *BillingService) sendPaymentMethodCaptureReminder(
+	ctx context.Context,
+	tenant *domain.Tenant,
+	customer *domain.Customer,
+	sub *domain.Subscription,
+	plan *domain.Plan,
+	daysUntilBilling int,
+) {
+	if s.mailer == nil {
+		return
+	}
+	captureURL := ""
+	if s.portal != nil {
+		if link, err := s.portal.CreatePaymentMethodCaptureLink(ctx, tenant.ID, sub.ID); err == nil {
+			captureURL = link
+		}
+	}
+	subject, html := email.PaymentMethodCaptureReminderHTML(tenant.Name, plan.Name, captureURL, daysUntilBilling)
+	_ = s.mailer.Send(ctx, customer.Email, subject, html)
+}
+
+// CompleteCardCaptureFromWebhook attaches a tokenized card after a capture-{subscriptionID} checkout.
+func (s *BillingService) CompleteCardCaptureFromWebhook(
+	ctx context.Context,
+	tenantID, subscriptionID uuid.UUID,
+	tokenKey string,
+	tx nomba.WebhookTransaction,
+) error {
+	if tokenKey == "" {
+		tokenKey = tx.TokenKey
+	}
+	if tokenKey == "" {
+		return fmt.Errorf("%w: missing tokenKey for card capture", domain.ErrValidation)
+	}
+	if s.paymentMethods == nil {
+		return fmt.Errorf("%w: payment method service not configured", domain.ErrValidation)
+	}
+
+	sub, err := s.repos.Subscriptions.GetByID(ctx, tenantID, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	cardLast4, cardBrand := cardDetailsFromTransaction(tx)
+	pm, err := s.paymentMethods.Create(ctx, tenantID, CreatePaymentMethodInput{
+		CustomerID: sub.CustomerID,
+		Type:       domain.PaymentMethodTokenizedCard,
+		TokenKey:   tokenKey,
+		CardLast4:  cardLast4,
+		CardBrand:  cardBrand,
+		IsDefault:  true,
+	})
+	if err != nil {
+		return err
+	}
+
+	sub.PaymentMethodID = &pm.ID
+	setSubscriptionMeta(sub, domain.SubscriptionMetaAwaitingPaymentMethod, nil)
+	clearPMReminderMetadata(sub)
+	if err := s.repos.Subscriptions.Update(ctx, sub); err != nil {
+		return err
+	}
+
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventPaymentMethodAttached, map[string]any{
+			"id":          pm.ID.String(),
+			"customer_id": pm.CustomerID.String(),
+		})
+		_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventSubscriptionUpdated, map[string]any{
+			"id":    sub.ID.String(),
+			"state": string(sub.State),
+		})
+	}
+
+	// Attempt renewal immediately if billing was waiting on a card.
+	if sub.State == domain.SubscriptionStateActive || sub.State == domain.SubscriptionStatePastDue {
+		_ = s.ChargeDueSubscription(ctx, tenantID, subscriptionID)
+	}
+	return nil
 }

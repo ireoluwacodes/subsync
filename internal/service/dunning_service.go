@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"github.com/ireoluwacodes/subsync/internal/clock"
+	"github.com/ireoluwacodes/subsync/internal/config"
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/email"
@@ -21,9 +22,11 @@ type DunningService struct {
 	repos     *db.Repos
 	invoices  *InvoiceService
 	subs      *SubscriptionService
+	billing   *BillingService
 	nomba     *nomba.Client
 	mailer    *email.MailerService
 	publisher TaskPublisher
+	cfg       *config.Config
 }
 
 func NewDunningService(
@@ -31,9 +34,11 @@ func NewDunningService(
 	repos *db.Repos,
 	invoices *InvoiceService,
 	subs *SubscriptionService,
+	billing *BillingService,
 	nombaClient *nomba.Client,
 	mailer *email.MailerService,
 	publisher TaskPublisher,
+	cfg *config.Config,
 ) *DunningService {
 	if clk == nil {
 		clk = clock.RealClock{}
@@ -43,9 +48,11 @@ func NewDunningService(
 		repos:     repos,
 		invoices:  invoices,
 		subs:      subs,
+		billing:   billing,
 		nomba:     nombaClient,
 		mailer:    mailer,
 		publisher: publisher,
+		cfg:       cfg,
 	}
 }
 
@@ -122,26 +129,18 @@ func (s *DunningService) retryCharge(ctx context.Context, tenant *domain.Tenant,
 	if err != nil {
 		return err
 	}
-	charged, chargeErr := s.invoices.ChargeWithPayment(ctx, tenant, pm, inv)
+	charged, chargeErr := s.invoices.ChargeWithPayment(ctx, tenant, pm, inv, customer.Email)
 	if chargeErr != nil {
 		return chargeErr
+	}
+	if charged.Status == domain.InvoiceStatusProcessing {
+		return nil
 	}
 	plan, err := s.repos.Plans.GetByID(ctx, tenant.ID, sub.PlanID)
 	if err != nil {
 		return err
 	}
-	sub.State = domain.SubscriptionStateActive
-	sub.DunningStep = 0
-	sub.DunningStartedAt = nil
-	start := sub.CurrentPeriodEnd
-	end := utils.PlanPeriodEnd(start, plan)
-	sub.CurrentPeriodStart = start
-	sub.CurrentPeriodEnd = end
-	sub.NextBillingAt = &end
-	_ = s.repos.Subscriptions.Update(ctx, sub)
-	subject, html := email.SubscriptionConfirmedHTML(tenant.Name, charged.AmountPaid, charged.Currency)
-	_ = s.mailer.Send(ctx, customer.Email, subject, html)
-	return nil
+	return s.billing.CompleteSuccessfulCharge(ctx, tenant, customer, sub, plan, charged)
 }
 
 func (s *DunningService) mandateFallback(ctx context.Context, tenant *domain.Tenant, sub *domain.Subscription) error {
@@ -156,6 +155,27 @@ func (s *DunningService) mandateFallback(ctx context.Context, tenant *domain.Ten
 	if err != nil {
 		return err
 	}
+
+	useMock := s.cfg == nil || s.cfg.BillingMockResult != ""
+	if useMock {
+		now := s.clock.Now().UTC()
+		inv.Status = domain.InvoiceStatusPaid
+		inv.AmountPaid = inv.AmountDue
+		inv.PaidAt = &now
+		if err := s.repos.Invoices.Update(ctx, inv); err != nil {
+			return err
+		}
+		customer, err := s.repos.Customers.GetByID(ctx, tenant.ID, sub.CustomerID)
+		if err != nil {
+			return err
+		}
+		plan, err := s.repos.Plans.GetByID(ctx, tenant.ID, sub.PlanID)
+		if err != nil {
+			return err
+		}
+		return s.billing.CompleteSuccessfulCharge(ctx, tenant, customer, sub, plan, inv)
+	}
+
 	status, err := s.nomba.GetMandateStatus(ctx, tenant, pm.MandateID)
 	if err != nil {
 		return err
@@ -165,10 +185,16 @@ func (s *DunningService) mandateFallback(ctx context.Context, tenant *domain.Ten
 	}
 	amount := fmt.Sprintf("%.2f", float64(inv.AmountDue)/100.0)
 	_, err = s.nomba.DebitMandate(ctx, tenant, nomba.DebitMandateRequest{
-		MandateID: pm.MandateID,
-		Amount:    amount,
+		MandateID:         pm.MandateID,
+		Amount:            amount,
+		MerchantReference: inv.NombaOrderRef,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	inv.Status = domain.InvoiceStatusProcessing
+	inv.AttemptCount++
+	return s.repos.Invoices.Update(ctx, inv)
 }
 
 func (s *DunningService) cancelSubscription(ctx context.Context, tenant *domain.Tenant, customer *domain.Customer, sub *domain.Subscription) error {

@@ -100,6 +100,15 @@ func (s *PortalService) CreateToken(ctx context.Context, tenantID uuid.UUID, in 
 	}, nil
 }
 
+// CreatePaymentMethodCaptureLink returns a customer portal URL where they can add a card for renewals.
+func (s *PortalService) CreatePaymentMethodCaptureLink(ctx context.Context, tenantID, subscriptionID uuid.UUID) (string, error) {
+	result, err := s.CreateToken(ctx, tenantID, CreatePortalTokenInput{SubscriptionID: subscriptionID})
+	if err != nil {
+		return "", err
+	}
+	return result.URL, nil
+}
+
 type PortalHomeView struct {
 	Subscription       *domain.Subscription `json:"subscription"`
 	PlanName           string               `json:"plan_name"`
@@ -219,6 +228,9 @@ func (s *PortalService) StartPaymentMethodUpdate(ctx context.Context, rawToken s
 			Currency:       nomba.CurrencyNGN,
 			AccountID:      tenant.NombaOrderAccountID(),
 			CallbackURL:    fmt.Sprintf("%s/portal/%s", strings.TrimRight(s.publicBaseURL, "/"), rawToken),
+			AllowedPaymentMethods: []nomba.PaymentMethod{
+				nomba.PaymentMethodCard,
+			},
 			OrderMetaData: map[string]string{
 				"purpose":         "portal_update_pm",
 				"portal_token_id": pt.ID.String(),
