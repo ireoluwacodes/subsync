@@ -33,6 +33,7 @@ type Config struct {
 	BillingMockResult    string
 	WebhookSigningSecret string
 	PublicBaseURL        string
+	CORSAllowedOrigins   []string
 
 	ResendAPIKey    string
 	ResendFromEmail string
@@ -56,6 +57,7 @@ func Load() (*Config, error) {
 		BillingMockResult:             os.Getenv("BILLING_MOCK_RESULT"),
 		WebhookSigningSecret:          os.Getenv("WEBHOOK_SIGNING_SECRET"),
 		PublicBaseURL:                 getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		CORSAllowedOrigins:            parseCSVEnv(os.Getenv("CORS_ALLOWED_ORIGINS")),
 		ResendAPIKey:                  os.Getenv("RESEND_API_KEY"),
 		ResendFromEmail:               os.Getenv("RESEND_FROM_EMAIL"),
 		CloudinaryCloudName:           os.Getenv("CLOUDINARY_CLOUD_NAME"),
@@ -133,6 +135,12 @@ func (c *Config) validate() error {
 		if c.NombaCredentialsEncryptionKey == "" {
 			return fmt.Errorf("NOMBA_CREDENTIALS_ENCRYPTION_KEY is required in production")
 		}
+		if c.BillingMockResult != "" {
+			return fmt.Errorf("BILLING_MOCK_RESULT must not be set in production")
+		}
+		if c.PublicBaseURL == "" || !strings.HasPrefix(c.PublicBaseURL, "https://") {
+			return fmt.Errorf("PUBLIC_BASE_URL must be an https URL in production")
+		}
 	}
 	return nil
 }
@@ -153,4 +161,19 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func parseCSVEnv(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

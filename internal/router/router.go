@@ -22,7 +22,7 @@ func SetupRouter(deps Dependencies) *gin.Engine {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(deps.Config.CORSAllowedOrigins))
 
 	RegisterHealthRoutes(r, deps.HealthHandler)
 
