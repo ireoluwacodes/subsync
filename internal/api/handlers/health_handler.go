@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/ireoluwacodes/subsync/internal/api/dto"
+	"github.com/ireoluwacodes/subsync/internal/api/openapi"
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/queue"
@@ -49,6 +50,10 @@ func (h *HealthHandler) Readiness(c *gin.Context) {
 	}
 
 	dto.RespondOK(c, gin.H{"status": "ready"})
+}
+
+func (h *HealthHandler) OpenAPI(c *gin.Context) {
+	c.Data(http.StatusOK, "application/json", openapi.Document)
 }
 
 func NotImplemented(c *gin.Context) {

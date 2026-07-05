@@ -8,4 +8,5 @@ import (
 func RegisterHealthRoutes(r *gin.Engine, h *handlers.HealthHandler) {
 	r.GET("/health", h.Liveness)
 	r.GET("/ready", h.Readiness)
+	r.GET("/openapi.json", h.OpenAPI)
 }
