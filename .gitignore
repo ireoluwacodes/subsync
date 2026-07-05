@@ -47,3 +47,6 @@ docker-compose.override.yml
 # Postman MCP (local sync artifacts)
 postman/
 scripts/build_postman_collection.py
+
+
+.hintrc
