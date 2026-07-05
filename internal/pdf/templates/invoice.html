@@ -1,8 +1,17 @@
 <!DOCTYPE html>
 <html>
-<head><title>Invoice</title></head>
+<head><title>Invoice {{.InvoiceID}}</title></head>
 <body>
   <h1>Invoice</h1>
-  <p>Template placeholder — implement in Phase 2.</p>
+  <p><strong>Tenant:</strong> {{.TenantName}}</p>
+  <p><strong>Invoice ID:</strong> {{.InvoiceID}}</p>
+  <p><strong>Status:</strong> {{.Status}}</p>
+  <p><strong>Amount Due:</strong> {{.AmountDue}} {{.Currency}}</p>
+  <p><strong>Period:</strong> {{.PeriodStart}} – {{.PeriodEnd}}</p>
+  <ul>
+  {{range .Lines}}
+    <li>{{.Description}}: {{.Amount}}</li>
+  {{end}}
+  </ul>
 </body>
 </html>
