@@ -12,11 +12,12 @@ import (
 )
 
 type SubscriptionHandler struct {
-	svc *service.SubscriptionService
+	svc      *service.SubscriptionService
+	checkout *service.SubscriptionCheckoutService
 }
 
-func NewSubscriptionHandler(svc *service.SubscriptionService) *SubscriptionHandler {
-	return &SubscriptionHandler{svc: svc}
+func NewSubscriptionHandler(svc *service.SubscriptionService, checkout *service.SubscriptionCheckoutService) *SubscriptionHandler {
+	return &SubscriptionHandler{svc: svc, checkout: checkout}
 }
 
 func (h *SubscriptionHandler) Create(c *gin.Context) {
@@ -299,4 +300,115 @@ func (h *SubscriptionHandler) ListForCustomer(c *gin.Context) {
 		out[i] = dto.SubscriptionToResponse(s)
 	}
 	dto.RespondOK(c, out)
+}
+
+type subscriptionCheckoutRequest struct {
+	CustomerID            string   `json:"customer_id" binding:"required"`
+	PlanID                string   `json:"plan_id" binding:"required"`
+	SuccessURL            string   `json:"success_url" binding:"required"`
+	CancelURL             string   `json:"cancel_url"`
+	SendCheckoutEmail     bool     `json:"send_checkout_email"`
+	CardOnly              bool     `json:"card_only"`
+	AllowBankTransfer     bool     `json:"allow_bank_transfer"`
+	AllowedPaymentMethods []string `json:"allowed_payment_methods"`
+}
+
+type cardCaptureRequest struct {
+	SuccessURL string `json:"success_url" binding:"required"`
+	CancelURL  string `json:"cancel_url"`
+	SendEmail  bool   `json:"send_email"`
+}
+
+func (h *SubscriptionHandler) parseCheckoutRequest(c *gin.Context) (uuid.UUID, service.SubscriptionCheckoutInput, bool) {
+	var req subscriptionCheckoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		dto.RespondError(c, dto.NewBindError("invalid request body"))
+		return uuid.Nil, service.SubscriptionCheckoutInput{}, false
+	}
+	customerID, err := uuid.Parse(req.CustomerID)
+	if err != nil {
+		dto.RespondError(c, dto.NewBindError("invalid customer_id"))
+		return uuid.Nil, service.SubscriptionCheckoutInput{}, false
+	}
+	planID, err := uuid.Parse(req.PlanID)
+	if err != nil {
+		dto.RespondError(c, dto.NewBindError("invalid plan_id"))
+		return uuid.Nil, service.SubscriptionCheckoutInput{}, false
+	}
+	return customerID, service.SubscriptionCheckoutInput{
+		CustomerID:            customerID,
+		PlanID:                planID,
+		SuccessURL:            req.SuccessURL,
+		CancelURL:             req.CancelURL,
+		SendCheckoutEmail:     req.SendCheckoutEmail,
+		CardOnly:              req.CardOnly,
+		AllowBankTransfer:     req.AllowBankTransfer,
+		AllowedPaymentMethods: req.AllowedPaymentMethods,
+	}, true
+}
+
+func (h *SubscriptionHandler) Checkout(c *gin.Context) {
+	tenant, ok := middlewareTenant(c)
+	if !ok {
+		return
+	}
+	_, input, ok := h.parseCheckoutRequest(c)
+	if !ok {
+		return
+	}
+	result, err := h.checkout.StartCheckout(c.Request.Context(), tenant.ID, input)
+	if err != nil {
+		dto.RespondError(c, err)
+		return
+	}
+	dto.RespondCreated(c, result)
+}
+
+func (h *SubscriptionHandler) ResumeCheckout(c *gin.Context) {
+	tenant, ok := middlewareTenant(c)
+	if !ok {
+		return
+	}
+	subscriptionID, err := dto.IDParam(c, "id")
+	if err != nil {
+		dto.RespondError(c, err)
+		return
+	}
+	_, input, ok := h.parseCheckoutRequest(c)
+	if !ok {
+		return
+	}
+	result, err := h.checkout.ResumeCheckout(c.Request.Context(), tenant.ID, subscriptionID, input)
+	if err != nil {
+		dto.RespondError(c, err)
+		return
+	}
+	dto.RespondOK(c, result)
+}
+
+func (h *SubscriptionHandler) CapturePaymentMethod(c *gin.Context) {
+	tenant, ok := middlewareTenant(c)
+	if !ok {
+		return
+	}
+	subscriptionID, err := dto.IDParam(c, "id")
+	if err != nil {
+		dto.RespondError(c, err)
+		return
+	}
+	var req cardCaptureRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		dto.RespondError(c, dto.NewBindError("invalid request body"))
+		return
+	}
+	result, err := h.checkout.StartCardCapture(c.Request.Context(), tenant.ID, subscriptionID, service.CardCaptureInput{
+		SuccessURL: req.SuccessURL,
+		CancelURL:  req.CancelURL,
+		SendEmail:  req.SendEmail,
+	})
+	if err != nil {
+		dto.RespondError(c, err)
+		return
+	}
+	dto.RespondOK(c, result)
 }

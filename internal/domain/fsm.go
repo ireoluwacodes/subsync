@@ -2,7 +2,8 @@ package domain
 
 // ValidTransitions maps from-state to allowed to-states.
 var ValidTransitions = map[SubscriptionState][]SubscriptionState{
-	SubscriptionStateTrialing: {SubscriptionStateActive, SubscriptionStateCanceled},
+	SubscriptionStateIncomplete: {SubscriptionStateActive, SubscriptionStateTrialing, SubscriptionStateCanceled},
+	SubscriptionStateTrialing:     {SubscriptionStateActive, SubscriptionStateCanceled},
 	SubscriptionStateActive:   {SubscriptionStatePastDue, SubscriptionStateCanceled, SubscriptionStatePaused},
 	SubscriptionStatePastDue:  {SubscriptionStateActive, SubscriptionStateCanceled},
 	SubscriptionStatePaused:   {SubscriptionStateActive, SubscriptionStateCanceled},

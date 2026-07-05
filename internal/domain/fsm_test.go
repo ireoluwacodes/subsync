@@ -9,6 +9,9 @@ import (
 
 func TestValidateTransition(t *testing.T) {
 	assert.NoError(t, ValidateTransition(SubscriptionStateTrialing, SubscriptionStateActive))
+	assert.NoError(t, ValidateTransition(SubscriptionStateIncomplete, SubscriptionStateActive))
+	assert.NoError(t, ValidateTransition(SubscriptionStateIncomplete, SubscriptionStateTrialing))
+	assert.NoError(t, ValidateTransition(SubscriptionStateIncomplete, SubscriptionStateCanceled))
 	assert.ErrorIs(t, ValidateTransition(SubscriptionStateCanceled, SubscriptionStateActive), ErrInvalidTransition)
 }
 

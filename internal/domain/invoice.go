@@ -26,6 +26,12 @@ const (
 	LineItemProrationDebit  LineItemType = "proration_debit"
 )
 
+const InvoicePurposeSubscriptionCheckout = "subscription_checkout"
+const InvoicePurposeCardCapture = "card_capture"
+
+const CheckoutOrderRefPrefix = "checkout-"
+const CardCaptureOrderRefPrefix = "capture-"
+
 type Invoice struct {
 	ID                 uuid.UUID
 	TenantID           uuid.UUID

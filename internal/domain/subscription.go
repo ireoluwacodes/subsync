@@ -10,8 +10,17 @@ import (
 type SubscriptionState string
 
 const (
-	SubscriptionStateTrialing SubscriptionState = "trialing"
-	SubscriptionStateActive   SubscriptionState = "active"
+	SubscriptionMetaAwaitingPaymentMethod = "awaiting_payment_method"
+	SubscriptionMetaLastPMReminderAt      = "last_pm_reminder_at" // deprecated; use pm_reminder_*_sent
+	SubscriptionMetaPMReminder7dSent        = "pm_reminder_7d_sent"
+	SubscriptionMetaPMReminder3dSent        = "pm_reminder_3d_sent"
+	SubscriptionMetaPMReminder1dSent        = "pm_reminder_1d_sent"
+)
+
+const (
+	SubscriptionStateIncomplete SubscriptionState = "incomplete"
+	SubscriptionStateTrialing   SubscriptionState = "trialing"
+	SubscriptionStateActive     SubscriptionState = "active"
 	SubscriptionStatePastDue  SubscriptionState = "past_due"
 	SubscriptionStateCanceled SubscriptionState = "canceled"
 	SubscriptionStateExpired  SubscriptionState = "expired"
