@@ -2,7 +2,6 @@ package nomba
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -33,10 +32,4 @@ func (c *Client) GetMandateStatus(ctx context.Context, tenant *domain.Tenant, ma
 // DebitMandate debits an active mandate.
 func (c *Client) DebitMandate(ctx context.Context, tenant *domain.Tenant, req DebitMandateRequest) (DebitMandateResult, error) {
 	return doData[DebitMandateResult](c, ctx, tenant, "POST", PathDirectDebitDebit, req)
-}
-
-// BankTransfer sends funds from a sub-account to a bank account.
-func (c *Client) BankTransfer(ctx context.Context, tenant *domain.Tenant, accountID string, req BankAccountTransferRequest) (BankAccountTransferResult, error) {
-	path := fmt.Sprintf(PathSubAccountTransfer, accountID)
-	return doData[BankAccountTransferResult](c, ctx, tenant, "POST", path, req)
 }

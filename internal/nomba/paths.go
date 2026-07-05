@@ -6,6 +6,7 @@ const (
 	PathAuthTokenRevoke   = "/v1/auth/token/revoke"
 	PathCheckoutOrder     = "/v1/checkout/order"
 	PathTokenizedPayment  = "/v1/checkout/tokenized-card-payment"
+	PathCheckoutVerify    = "/v1/checkout/transactions"
 	PathDirectDebitCreate = "/v1/direct-debits"
 	PathDirectDebitStatus = "/v1/direct-debits/status"
 	PathDirectDebitDebit  = "/v1/direct-debits/debit-mandate"

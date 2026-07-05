@@ -65,8 +65,9 @@ func (m MandateStatusResult) MandateReadyForDebit() bool {
 
 // DebitMandateRequest is the body for POST /v1/direct-debits/debit-mandate.
 type DebitMandateRequest struct {
-	MandateID string `json:"mandateId"`
-	Amount    string `json:"amount"`
+	MandateID         string `json:"mandateId"`
+	Amount            string `json:"amount"`
+	MerchantReference string `json:"merchantReference,omitempty"`
 }
 
 // DebitMandateResult is the data payload from debit-mandate.
