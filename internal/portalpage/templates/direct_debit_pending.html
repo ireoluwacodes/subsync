@@ -1,0 +1,17 @@
+{{define "content"}}
+<div class="card">
+  <h1>Complete direct debit setup</h1>
+  <p class="muted">{{.TenantName}}</p>
+  {{if .Ready}}
+  <p><span class="badge ok">Ready</span> Your direct debit mandate is active.</p>
+  <a href="/portal/{{.Token}}?msg=Direct+debit+is+ready" class="btn btn-primary" style="margin-top:1rem;">Back to billing</a>
+  {{else}}
+  <p><span class="badge warn">{{.MandateStatus}}</span> Complete the steps below to activate your mandate.</p>
+  <hr>
+  <div class="instructions">{{.Instructions}}</div>
+  <p class="muted" style="margin-top:1rem;font-size:.85rem;">This page refreshes automatically. Validation usually takes a few minutes.</p>
+  <meta http-equiv="refresh" content="30">
+  <a href="/portal/{{.Token}}" class="btn btn-secondary" style="margin-top:1rem;">Back to billing</a>
+  {{end}}
+</div>
+{{end}}

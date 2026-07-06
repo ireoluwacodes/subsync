@@ -25,6 +25,8 @@ type PortalService struct {
 	repos         *db.Repos
 	subs          *SubscriptionService
 	paymentMethod *PaymentMethodService
+	mandates      *MandateService
+	pmResolver    *PaymentMethodResolver
 	nomba         *nomba.Client
 	cfg           *config.Config
 	publicBaseURL string
@@ -36,6 +38,7 @@ func NewPortalService(
 	repos *db.Repos,
 	subs *SubscriptionService,
 	paymentMethods *PaymentMethodService,
+	mandates *MandateService,
 	nombaClient *nomba.Client,
 	cfg *config.Config,
 	publicBaseURL string,
@@ -49,6 +52,8 @@ func NewPortalService(
 		repos:         repos,
 		subs:          subs,
 		paymentMethod: paymentMethods,
+		mandates:      mandates,
+		pmResolver:    NewPaymentMethodResolver(repos.PaymentMethods),
 		nomba:         nombaClient,
 		cfg:           cfg,
 		publicBaseURL: publicBaseURL,
@@ -57,7 +62,7 @@ func NewPortalService(
 }
 
 type CreatePortalTokenInput struct {
-	SubscriptionID   uuid.UUID
+	SubscriptionID uuid.UUID
 	ExpiresInHours   int
 }
 
@@ -100,7 +105,6 @@ func (s *PortalService) CreateToken(ctx context.Context, tenantID uuid.UUID, in 
 	}, nil
 }
 
-// CreatePaymentMethodCaptureLink returns a customer portal URL where they can add a card for renewals.
 func (s *PortalService) CreatePaymentMethodCaptureLink(ctx context.Context, tenantID, subscriptionID uuid.UUID) (string, error) {
 	result, err := s.CreateToken(ctx, tenantID, CreatePortalTokenInput{SubscriptionID: subscriptionID})
 	if err != nil {
@@ -110,13 +114,20 @@ func (s *PortalService) CreatePaymentMethodCaptureLink(ctx context.Context, tena
 }
 
 type PortalHomeView struct {
-	Subscription       *domain.Subscription `json:"subscription"`
-	PlanName           string               `json:"plan_name"`
-	CustomerEmail      string               `json:"customer_email"`
-	CancelAtPeriodEnd  bool                 `json:"cancel_at_period_end"`
-	LatestInvoice      *domain.Invoice      `json:"latest_invoice,omitempty"`
-	PaymentMethodLast4 string               `json:"payment_method_last4,omitempty"`
-	PaymentMethodBrand string               `json:"payment_method_brand,omitempty"`
+	Subscription          *domain.Subscription `json:"subscription"`
+	PlanName              string               `json:"plan_name"`
+	CustomerEmail         string               `json:"customer_email"`
+	TenantName            string               `json:"tenant_name"`
+	CancelAtPeriodEnd     bool                 `json:"cancel_at_period_end"`
+	LatestInvoice         *domain.Invoice      `json:"latest_invoice,omitempty"`
+	PaymentMethodLast4    string               `json:"payment_method_last4,omitempty"`
+	PaymentMethodBrand    string               `json:"payment_method_brand,omitempty"`
+	AwaitingPaymentMethod bool                 `json:"awaiting_payment_method"`
+	HasCard               bool                 `json:"has_card"`
+	HasMandate            bool                 `json:"has_mandate"`
+	MandateStatus         string               `json:"mandate_status,omitempty"`
+	CanSetupDirectDebit   bool                 `json:"can_setup_direct_debit"`
+	MandateInstructions   string               `json:"mandate_instructions,omitempty"`
 }
 
 func (s *PortalService) Home(ctx context.Context, rawToken string) (*PortalHomeView, error) {
@@ -137,26 +148,74 @@ func (s *PortalService) Home(ctx context.Context, rawToken string) (*PortalHomeV
 	if err != nil {
 		return nil, err
 	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, pt.TenantID)
+	if err != nil {
+		return nil, err
+	}
 
 	view := &PortalHomeView{
 		Subscription:      sub,
 		PlanName:          plan.Name,
 		CustomerEmail:     customer.Email,
+		TenantName:        tenant.Name,
 		CancelAtPeriodEnd: sub.CancelAtPeriodEnd,
 	}
+	s.enrichPaymentMethodView(ctx, pt.TenantID, sub, view)
 
 	inv, err := s.repos.Invoices.GetOpenBySubscription(ctx, pt.TenantID, sub.ID)
 	if err == nil {
 		view.LatestInvoice = inv
 	}
+	return view, nil
+}
 
-	pm, err := s.repos.PaymentMethods.GetDefaultForCustomer(ctx, pt.TenantID, sub.CustomerID)
-	if err == nil {
-		view.PaymentMethodLast4 = pm.CardLast4
-		view.PaymentMethodBrand = pm.CardBrand
+func (s *PortalService) enrichPaymentMethodView(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, view *PortalHomeView) {
+	view.AwaitingPaymentMethod = subscriptionAwaitingPaymentMethod(sub)
+	if instr, ok := sub.Metadata[domain.SubscriptionMetaMandateInstructions].(string); ok {
+		view.MandateInstructions = instr
 	}
 
-	return view, nil
+	if card, err := s.pmResolver.ResolvePrimaryPM(ctx, tenantID, sub); err == nil && card != nil {
+		view.HasCard = true
+		view.PaymentMethodLast4 = card.CardLast4
+		view.PaymentMethodBrand = card.CardBrand
+	}
+
+	if sub.FallbackPaymentMethodID != nil {
+		pm, err := s.repos.PaymentMethods.GetByID(ctx, tenantID, *sub.FallbackPaymentMethodID)
+		if err == nil {
+			view.HasMandate = true
+			view.MandateStatus = string(pm.MandateStatus)
+		}
+	} else {
+		pms, err := s.repos.PaymentMethods.ListByCustomer(ctx, tenantID, sub.CustomerID)
+		if err == nil {
+			for _, pm := range pms {
+				if pm.Type == domain.PaymentMethodDirectDebit {
+					view.HasMandate = true
+					view.MandateStatus = string(pm.MandateStatus)
+					break
+				}
+			}
+		}
+	}
+
+	view.CanSetupDirectDebit = s.canSetupDirectDebit(sub, view)
+}
+
+func (s *PortalService) canSetupDirectDebit(sub *domain.Subscription, view *PortalHomeView) bool {
+	switch sub.State {
+	case domain.SubscriptionStateActive, domain.SubscriptionStateTrialing, domain.SubscriptionStatePastDue:
+	default:
+		return false
+	}
+	if view.HasMandate && view.MandateStatus == string(domain.MandateStatusReady) {
+		return false
+	}
+	if view.HasMandate && view.MandateStatus == string(domain.MandateStatusPending) {
+		return false
+	}
+	return true
 }
 
 type PortalCancelInput struct {
@@ -249,6 +308,66 @@ func (s *PortalService) StartPaymentMethodUpdate(ctx context.Context, rawToken s
 	}, nil
 }
 
+func (s *PortalService) StartDirectDebitSetup(ctx context.Context, rawToken string, in DirectDebitSetupInput) (*DirectDebitSetupResult, error) {
+	pt, err := s.resolveToken(ctx, rawToken)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := s.repos.Subscriptions.GetByID(ctx, pt.TenantID, pt.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := s.repos.Plans.GetByID(ctx, pt.TenantID, sub.PlanID)
+	if err != nil {
+		return nil, err
+	}
+	customer, err := s.repos.Customers.GetByID(ctx, pt.TenantID, pt.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, pt.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if in.CustomerEmail == "" {
+		in.CustomerEmail = customer.Email
+	}
+	if in.CustomerName == "" {
+		in.CustomerName = customer.Name
+	}
+	return s.mandates.CreateForSubscription(ctx, tenant, sub, plan, customer, in)
+}
+
+func (s *PortalService) GetDirectDebitStatus(ctx context.Context, rawToken string) (*DirectDebitStatusResult, error) {
+	pt, err := s.resolveToken(ctx, rawToken)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := s.repos.Subscriptions.GetByID(ctx, pt.TenantID, pt.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub.FallbackPaymentMethodID == nil {
+		return nil, fmt.Errorf("%w: no direct debit setup in progress", domain.ErrNotFound)
+	}
+	pm, err := s.repos.PaymentMethods.GetByID(ctx, pt.TenantID, *sub.FallbackPaymentMethodID)
+	if err != nil {
+		return nil, err
+	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, pt.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.mandates.RefreshStatus(ctx, tenant, pm)
+	if err != nil {
+		return nil, err
+	}
+	if instr, ok := sub.Metadata[domain.SubscriptionMetaMandateInstructions].(string); ok && out.Instructions == "" {
+		out.Instructions = instr
+	}
+	return out, nil
+}
+
 func (s *PortalService) HandlePaymentSuccess(ctx context.Context, tenantID uuid.UUID, orderRef, tokenKey string, tx nomba.WebhookTransaction) error {
 	if !strings.HasPrefix(orderRef, "portal-") {
 		return nil
@@ -273,13 +392,14 @@ func (s *PortalService) HandlePaymentSuccess(ctx context.Context, tenantID uuid.
 		return fmt.Errorf("%w: missing tokenKey for portal payment method update", domain.ErrValidation)
 	}
 
+	setDefault := !s.pmResolver.CustomerHasDefaultCard(ctx, tenantID, token.CustomerID)
 	pm, err := s.paymentMethod.Create(ctx, tenantID, CreatePaymentMethodInput{
 		CustomerID: token.CustomerID,
 		Type:       domain.PaymentMethodTokenizedCard,
 		TokenKey:   tokenKey,
 		CardLast4:  "",
 		CardBrand:  "",
-		IsDefault:  true,
+		IsDefault:  setDefault,
 	})
 	if err != nil {
 		return err
@@ -290,6 +410,8 @@ func (s *PortalService) HandlePaymentSuccess(ctx context.Context, tenantID uuid.
 		return err
 	}
 	sub.PaymentMethodID = &pm.ID
+	setSubscriptionMeta(sub, domain.SubscriptionMetaAwaitingPaymentMethod, nil)
+	clearPMReminderMetadata(sub)
 	if err := s.repos.Subscriptions.Update(ctx, sub); err != nil {
 		return err
 	}
@@ -305,6 +427,14 @@ func (s *PortalService) HandlePaymentSuccess(ctx context.Context, tenantID uuid.
 		})
 	}
 	return nil
+}
+
+func (s *PortalService) CustomerName(ctx context.Context, tenantID, customerID uuid.UUID) (string, error) {
+	customer, err := s.repos.Customers.GetByID(ctx, tenantID, customerID)
+	if err != nil {
+		return "", err
+	}
+	return customer.Name, nil
 }
 
 func (s *PortalService) resolveToken(ctx context.Context, rawToken string) (*domain.PortalToken, error) {

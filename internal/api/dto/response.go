@@ -6,8 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/nomba"
 )
 
 type APIError struct {
@@ -54,6 +56,15 @@ func RespondCreated(c *gin.Context, data any) {
 
 func RespondError(c *gin.Context, err error) {
 	apiErr, status := mapError(err)
+	if status >= http.StatusInternalServerError {
+		zap.L().Error("request failed",
+			zap.String("request_id", requestID(c)),
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.Int("status", status),
+			zap.Error(err),
+		)
+	}
 	c.JSON(status, Envelope{
 		Meta:  Meta{RequestID: requestID(c)},
 		Error: apiErr,
@@ -84,6 +95,14 @@ func mapError(err error) (*APIError, int) {
 	case errors.Is(err, domain.ErrNotImplemented):
 		return &APIError{Code: "not_implemented", Message: err.Error()}, http.StatusNotImplemented
 	default:
+		var nombaErr *nomba.HTTPError
+		if errors.As(err, &nombaErr) {
+			msg := nombaErr.Error()
+			if nombaErr.StatusCode >= 500 {
+				return &APIError{Code: "nomba_error", Message: msg}, http.StatusBadGateway
+			}
+			return &APIError{Code: "nomba_error", Message: msg}, http.StatusUnprocessableEntity
+		}
 		var bindErr *BindError
 		if errors.As(err, &bindErr) {
 			return &APIError{Code: "invalid_request", Message: bindErr.Error(), Details: bindErr.Details}, http.StatusBadRequest

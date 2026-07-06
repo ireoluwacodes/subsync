@@ -5,12 +5,18 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/api/handlers"
 	"github.com/ireoluwacodes/subsync/internal/config"
 	"github.com/ireoluwacodes/subsync/internal/db"
+	"github.com/ireoluwacodes/subsync/internal/portalpage"
 	"github.com/ireoluwacodes/subsync/internal/queue"
 	"github.com/ireoluwacodes/subsync/internal/service"
 )
 
 // Setup wires handlers and returns a configured Gin engine.
 func Setup(cfg *config.Config, database *db.DB, q *queue.Queue, repos *db.Repos, svcs *service.Services) *gin.Engine {
+	portalRenderer, err := portalpage.NewRenderer()
+	if err != nil {
+		panic("portal renderer: " + err.Error())
+	}
+
 	deps := Dependencies{
 		Config:               cfg,
 		Repos:                repos,
@@ -27,7 +33,7 @@ func Setup(cfg *config.Config, database *db.DB, q *queue.Queue, repos *db.Repos,
 		InvoiceHandler:       handlers.NewInvoiceHandler(svcs.Invoices),
 		PaymentMethodHandler: handlers.NewPaymentMethodHandler(svcs.PaymentMethods),
 		WebhookHandler:       handlers.NewWebhookHandler(svcs.Webhooks),
-		PortalHandler:        handlers.NewPortalHandler(svcs.Portal),
+		PortalHandler:        handlers.NewPortalHandler(svcs.Portal, portalRenderer),
 		AnalyticsHandler:     handlers.NewAnalyticsHandler(svcs.Analytics),
 		NombaWebhookHandler:  handlers.NewNombaWebhookHandler(cfg, svcs.Tenants, svcs.NombaEvents),
 	}
