@@ -16,19 +16,20 @@ import (
 )
 
 type InvoiceService struct {
-	repo     domain.InvoiceRepository
-	cfg      *config.Config
-	pdf      *pdf.Renderer
-	nomba    *nomba.Client
-	clock    clock.Clock
-	webhooks *WebhookService
+	repo      domain.InvoiceRepository
+	customers domain.CustomerRepository
+	cfg       *config.Config
+	pdf       *pdf.Renderer
+	nomba     *nomba.Client
+	clock     clock.Clock
+	webhooks  *WebhookService
 }
 
-func NewInvoiceService(repo domain.InvoiceRepository, cfg *config.Config, nombaClient *nomba.Client, clk clock.Clock, webhooks *WebhookService) *InvoiceService {
+func NewInvoiceService(repo domain.InvoiceRepository, customers domain.CustomerRepository, cfg *config.Config, nombaClient *nomba.Client, clk clock.Clock, webhooks *WebhookService) *InvoiceService {
 	if clk == nil {
 		clk = clock.RealClock{}
 	}
-	return &InvoiceService{repo: repo, cfg: cfg, pdf: pdf.NewRenderer(), nomba: nombaClient, clock: clk, webhooks: webhooks}
+	return &InvoiceService{repo: repo, customers: customers, cfg: cfg, pdf: pdf.NewRenderer(), nomba: nombaClient, clock: clk, webhooks: webhooks}
 }
 
 func (s *InvoiceService) Get(ctx context.Context, tenantID, id uuid.UUID) (*domain.Invoice, []*domain.InvoiceLineItem, error) {
@@ -300,7 +301,11 @@ func (s *InvoiceService) RenderPDF(ctx context.Context, tenantID, id uuid.UUID, 
 	if err != nil {
 		return nil, err
 	}
-	return s.pdf.RenderInvoice(tenant, inv, items)
+	var customer *domain.Customer
+	if s.customers != nil {
+		customer, _ = s.customers.GetByID(ctx, tenantID, inv.CustomerID)
+	}
+	return s.pdf.RenderInvoice(tenant, inv, items, customer)
 }
 
 func (s *InvoiceService) CustomerPaidTotal(ctx context.Context, tenantID, customerID uuid.UUID) (int64, error) {

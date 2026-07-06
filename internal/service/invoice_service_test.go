@@ -53,7 +53,7 @@ func (m *memoryInvoiceRepo) SumPaidByCustomer(ctx context.Context, tenantID, cus
 func TestInvoiceService_MockChargeSuccess(t *testing.T) {
 	repo := &memoryInvoiceRepo{}
 	cfg := &config.Config{BillingMockResult: "success"}
-	svc := NewInvoiceService(repo, cfg, nil, nil, nil)
+	svc := NewInvoiceService(repo, nil, cfg, nil, nil, nil)
 	inv := &domain.Invoice{
 		TenantID:  uuid.New(),
 		Status:    domain.InvoiceStatusOpen,
@@ -69,7 +69,7 @@ func TestInvoiceService_MockChargeSuccess(t *testing.T) {
 func TestInvoiceService_MockChargeFailure(t *testing.T) {
 	repo := &memoryInvoiceRepo{}
 	cfg := &config.Config{BillingMockResult: "failure"}
-	svc := NewInvoiceService(repo, cfg, nil, nil, nil)
+	svc := NewInvoiceService(repo, nil, cfg, nil, nil, nil)
 	inv := &domain.Invoice{
 		TenantID:  uuid.New(),
 		Status:    domain.InvoiceStatusOpen,

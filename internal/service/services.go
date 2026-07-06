@@ -32,7 +32,7 @@ type Services struct {
 func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client, jwt *auth.JWTService, q *queue.Queue) *Services {
 	clk := clock.RealClock{}
 	mailer := email.NewMailerService(cfg)
-	invoices := NewInvoiceService(repos.Invoices, cfg, nombaClient, clk, nil)
+	invoices := NewInvoiceService(repos.Invoices, repos.Customers, cfg, nombaClient, clk, nil)
 
 	var publisher TaskPublisher
 	if q != nil {
