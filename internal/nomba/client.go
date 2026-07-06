@@ -177,12 +177,18 @@ func (c *Client) roundTrip(ctx context.Context, baseURL, accountID, method, path
 		return nil
 	}
 
+	if c.log != nil {
+		c.log.Warn("nomba api http error",
+			zap.String("method", method),
+			zap.String("path", path),
+			zap.Int("status", resp.StatusCode),
+			zap.ByteString("response_body", respBody),
+		)
+	}
+
 	var apiErr APIError
 	if err := json.Unmarshal(respBody, &apiErr); err != nil || apiErr.Code == "" {
-		return &HTTPError{
-			StatusCode:  resp.StatusCode,
-			Description: string(respBody),
-		}
+		return HTTPErrorFromNombaBody(resp.StatusCode, respBody)
 	}
 	return NewHTTPError(resp.StatusCode, apiErr)
 }

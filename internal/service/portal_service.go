@@ -362,7 +362,7 @@ func (s *PortalService) ListBanksForPortal(ctx context.Context, rawToken string)
 	if err := s.repos.Tenants.LoadNombaSecret(ctx, tenant); err != nil {
 		return nil, err
 	}
-	banks, err := s.nomba.ListBanks(ctx, tenant)
+	banks, err := s.nomba.ListDirectDebitBanks(ctx, tenant)
 	if err != nil {
 		return nil, err
 	}

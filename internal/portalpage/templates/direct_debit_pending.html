@@ -17,13 +17,34 @@
       >Back to billing</a
     >
   </div>
+  {{else if eq .SetupPhase "bank_advice"}}
+  <div class="outcome-hero pending">
+    <div class="outcome-icon">✓</div>
+    <span class="eyebrow">Validation received</span>
+    <h1>Confirming with your bank</h1>
+    <p class="lead">
+      Your activation payment was confirmed. Nomba is finalizing the mandate
+      with your bank. This can take up to 72 hours — we'll email you when
+      direct debit is ready.
+    </p>
+    <div class="status-row" style="justify-content: center">
+      <span class="badge ok">{{.MandateStatus}}</span>
+    </div>
+  </div>
+
+  <p class="pulse">Checking for updates — this page refreshes automatically. You can close this tab; we'll email you when setup is complete.</p>
+  <meta http-equiv="refresh" content="30" />
+
+  <div class="actions">
+    <a href="/portal/{{.Token}}" class="btn btn-secondary">Back to billing</a>
+  </div>
   {{else}}
   <div class="outcome-hero pending">
     <div class="outcome-icon">…</div>
     <span class="eyebrow">Validation required</span>
     <h1>Complete direct debit setup</h1>
     <p class="lead">
-      Follow the steps below to activate your mandate with your bank.
+      Make a one-time activation payment to enable your direct debit mandate.
     </p>
     <div class="status-row" style="justify-content: center">
       <span class="badge warn">{{.MandateStatus}}</span>
@@ -31,7 +52,47 @@
   </div>
 
   <hr class="divider" />
-  <div class="instructions">{{.Instructions}}</div>
+
+  {{if .Instructions.Parsed}}
+  <div class="mandate-activation">
+    <div class="mandate-amount-card">
+      <span class="mandate-amount-label">Activation payment</span>
+      <span class="mandate-amount-value">{{.Instructions.AmountDisplay}}</span>
+      <p class="mandate-amount-hint">One-time NIBSS validation transfer</p>
+    </div>
+
+    <div class="section-label" style="margin-top:1.15rem;">What to do</div>
+    <ol class="mandate-steps">
+      <li>Open your bank’s <strong>mobile app</strong> or <strong>internet banking</strong>.</li>
+      <li>Transfer exactly <strong>{{.Instructions.AmountDisplay}}</strong> to <strong>one</strong> of the accounts below.</li>
+      <li>Use the <strong>same bank account</strong> you registered for this mandate.</li>
+      <li>Wait a few minutes — this page refreshes automatically once Nomba confirms payment.</li>
+    </ol>
+
+    <div class="section-label" style="margin-top:1.15rem;">Pay to one of these accounts</div>
+    <div class="mandate-pay-options">
+      {{range .Instructions.PaymentOptions}}
+      <div class="mandate-pay-card">
+        {{if .Label}}<span class="mandate-pay-label">{{.Label}}</span>{{end}}
+        <div class="mandate-pay-row">
+          <span>Account number</span>
+          <span class="mandate-pay-value">{{.AccountNumber}}</span>
+        </div>
+        <div class="mandate-pay-row">
+          <span>Bank</span>
+          <span class="mandate-pay-value">{{.Bank}}</span>
+        </div>
+        <div class="mandate-pay-row">
+          <span>Account name</span>
+          <span class="mandate-pay-value">{{.AccountName}}</span>
+        </div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{else if .Instructions.RawFallback}}
+  <div class="instructions">{{.Instructions.RawFallback}}</div>
+  {{end}}
 
   <p class="pulse">Checking for updates — this page refreshes automatically</p>
   <meta http-equiv="refresh" content="30" />

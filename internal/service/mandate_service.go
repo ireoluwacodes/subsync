@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/clock"
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/email"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 const (
@@ -39,6 +42,12 @@ type MandateService struct {
 	repos    *db.Repos
 	nomba    *nomba.Client
 	webhooks *WebhookService
+	mailer   *email.MailerService
+	portal   mandatePortalLinker
+}
+
+type mandatePortalLinker interface {
+	CreatePaymentMethodCaptureLink(ctx context.Context, tenantID, subscriptionID uuid.UUID) (string, error)
 }
 
 func NewMandateService(clk clock.Clock, repos *db.Repos, nombaClient *nomba.Client, webhooks *WebhookService) *MandateService {
@@ -46,6 +55,11 @@ func NewMandateService(clk clock.Clock, repos *db.Repos, nombaClient *nomba.Clie
 		clk = clock.RealClock{}
 	}
 	return &MandateService{clock: clk, repos: repos, nomba: nombaClient, webhooks: webhooks}
+}
+
+func (s *MandateService) SetNotifications(mailer *email.MailerService, portal mandatePortalLinker) {
+	s.mailer = mailer
+	s.portal = portal
 }
 
 type DirectDebitSetupInput struct {
@@ -71,6 +85,7 @@ type DirectDebitStatusResult struct {
 	MandateStatus   string `json:"mandate_status"`
 	NombaStatus     string `json:"nomba_status,omitempty"`
 	AdviceStatus    string `json:"advice_status,omitempty"`
+	SetupPhase      string `json:"setup_phase,omitempty"`
 	Ready           bool   `json:"ready"`
 	Instructions    string `json:"instructions,omitempty"`
 }
@@ -83,6 +98,14 @@ func (s *MandateService) CreateForSubscription(
 	customer *domain.Customer,
 	in DirectDebitSetupInput,
 ) (*DirectDebitSetupResult, error) {
+	normalized, err := normalizeDirectDebitSetupInput(in)
+	if err != nil {
+		return nil, err
+	}
+	in = normalized
+	if err := validateDirectDebitSetupInput(in); err != nil {
+		return nil, err
+	}
 	if err := s.repos.Tenants.LoadNombaSecret(ctx, tenant); err != nil {
 		return nil, err
 	}
@@ -93,8 +116,7 @@ func (s *MandateService) CreateForSubscription(
 		BankCode:              in.BankCode,
 		CustomerName:          in.CustomerName,
 		CustomerAccountName:   in.CustomerAccountName,
-		CustomerAddress:       in.CustomerAddress,
-		Amount:                float64(plan.Amount) / 100.0,
+		CustomerAddress:       strings.TrimSpace(in.CustomerAddress),
 		Frequency:             nomba.MandateFrequencyVariable,
 		Narration:             fmt.Sprintf("SubSync subscription %s", plan.Name),
 		CustomerPhoneNumber:   in.CustomerPhone,
@@ -151,6 +173,7 @@ func (s *MandateService) RefreshStatus(ctx context.Context, tenant *domain.Tenan
 		MandateStatus: string(pm.MandateStatus),
 		NombaStatus:   status.MandateStatus,
 		AdviceStatus:  status.MandateAdviceStatus,
+		SetupPhase:    status.MandateSetupPhase(),
 		Ready:         status.MandateReadyForDebit(),
 	}
 	if status.MandateReadyForDebit() && pm.MandateStatus != domain.MandateStatusReady {
@@ -195,6 +218,7 @@ func (s *MandateService) activateMandatePM(ctx context.Context, tenantID uuid.UU
 	if err != nil {
 		return err
 	}
+	var notifySub *domain.Subscription
 	for _, sub := range subs {
 		if sub.FallbackPaymentMethodID == nil || *sub.FallbackPaymentMethodID != pm.ID {
 			continue
@@ -205,6 +229,9 @@ func (s *MandateService) activateMandatePM(ctx context.Context, tenantID uuid.UU
 		if err := s.repos.Subscriptions.Update(ctx, sub); err != nil {
 			return err
 		}
+		if notifySub == nil {
+			notifySub = sub
+		}
 		if s.webhooks != nil {
 			_ = s.webhooks.Emit(ctx, tenantID, domain.WebhookEventPaymentMethodAttached, map[string]any{
 				"id":          pm.ID.String(),
@@ -213,7 +240,31 @@ func (s *MandateService) activateMandatePM(ctx context.Context, tenantID uuid.UU
 			})
 		}
 	}
+	if notifySub != nil {
+		s.sendMandateReadyEmail(ctx, tenantID, notifySub)
+	}
 	return nil
+}
+
+func (s *MandateService) sendMandateReadyEmail(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription) {
+	if s.mailer == nil || s.portal == nil || sub == nil {
+		return
+	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return
+	}
+	customer, err := s.repos.Customers.GetByID(ctx, tenantID, sub.CustomerID)
+	if err != nil || customer.Email == "" {
+		return
+	}
+	plan, err := s.repos.Plans.GetByID(ctx, tenantID, sub.PlanID)
+	if err != nil {
+		return
+	}
+	portalURL, _ := s.portal.CreatePaymentMethodCaptureLink(ctx, tenantID, sub.ID)
+	subject, htmlBody := email.DirectDebitReadyHTML(tenant.Name, plan.Name, portalURL)
+	_ = s.mailer.Send(ctx, customer.Email, subject, htmlBody)
 }
 
 func numericMerchantRef(subID uuid.UUID, now time.Time) string {
@@ -222,4 +273,43 @@ func numericMerchantRef(subID uuid.UUID, now time.Time) string {
 		n = n*256 + uint64(subID[i])
 	}
 	return fmt.Sprintf("%010d%010d", n%1_000_000_0000, uint64(now.Unix())%1_000_000_0000)
+}
+
+func normalizeDirectDebitSetupInput(in DirectDebitSetupInput) (DirectDebitSetupInput, error) {
+	phone, err := utils.NormalizeNigerianPhone(in.CustomerPhone)
+	if err != nil {
+		return DirectDebitSetupInput{}, err
+	}
+	in.CustomerPhone = phone
+	in.CustomerAccountNumber = strings.TrimSpace(in.CustomerAccountNumber)
+	in.BankCode = strings.TrimSpace(in.BankCode)
+	in.CustomerName = strings.TrimSpace(in.CustomerName)
+	in.CustomerAccountName = strings.TrimSpace(in.CustomerAccountName)
+	in.CustomerAddress = strings.TrimSpace(in.CustomerAddress)
+	return in, nil
+}
+
+func validateDirectDebitSetupInput(in DirectDebitSetupInput) error {
+	if strings.TrimSpace(in.CustomerAccountNumber) == "" {
+		return fmt.Errorf("%w: account number is required", domain.ErrValidation)
+	}
+	if strings.TrimSpace(in.BankCode) == "" {
+		return fmt.Errorf("%w: bank is required", domain.ErrValidation)
+	}
+	if !nomba.BankSupportsDirectDebit(strings.TrimSpace(in.BankCode)) {
+		return fmt.Errorf("%w: this bank does not support NIBSS direct debit", domain.ErrValidation)
+	}
+	if strings.TrimSpace(in.CustomerName) == "" {
+		return fmt.Errorf("%w: customer name is required", domain.ErrValidation)
+	}
+	if strings.TrimSpace(in.CustomerAccountName) == "" {
+		return fmt.Errorf("%w: account name is required", domain.ErrValidation)
+	}
+	if strings.TrimSpace(in.CustomerPhone) == "" {
+		return fmt.Errorf("%w: phone number is required", domain.ErrValidation)
+	}
+	if strings.TrimSpace(in.CustomerAddress) == "" {
+		return fmt.Errorf("%w: address is required for direct debit mandates", domain.ErrValidation)
+	}
+	return nil
 }

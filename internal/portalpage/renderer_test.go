@@ -95,3 +95,47 @@ func TestRenderer_RenderBillingSuccess(t *testing.T) {
 	require.Contains(t, html, "Payment successful")
 	require.Contains(t, html, "e50530f0-2a12-44b8-b3c1-40c9e654bff3")
 }
+
+func TestRenderer_RenderDirectDebitPending_StructuredInstructions(t *testing.T) {
+	r, err := NewRenderer()
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = r.RenderDirectDebitPending(&buf, DirectDebitPendingData{
+		Title:         "Complete direct debit",
+		Token:         "test-token",
+		TenantName:    "Acme",
+		Instructions:  ParseMandateInstructions(sampleNombaMandateText),
+		MandateStatus: "pending",
+		SetupPhase:    "validation",
+	})
+	require.NoError(t, err)
+	html := buf.String()
+	require.Contains(t, html, "₦50.00")
+	require.Contains(t, html, "9880218357")
+	require.Contains(t, html, "9020025928")
+	require.Contains(t, html, "mandate-steps")
+	require.NotContains(t, html, "Mobile Banking App or Internet Banking platform.Please")
+}
+
+func TestRenderer_RenderDirectDebitPending_BankAdvice(t *testing.T) {
+	r, err := NewRenderer()
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = r.RenderDirectDebitPending(&buf, DirectDebitPendingData{
+		Title:         "Complete direct debit",
+		Token:         "test-token",
+		TenantName:    "Acme",
+		MandateStatus: "Active",
+		SetupPhase:    "bank_advice",
+	})
+	require.NoError(t, err)
+	html := buf.String()
+	require.Contains(t, html, "Confirming with your bank")
+	require.Contains(t, html, "Active")
+	require.Contains(t, html, "72 hours")
+	require.Contains(t, html, "email you when")
+	require.NotContains(t, html, "What to do")
+	require.NotContains(t, html, "Pay to one of these accounts")
+}

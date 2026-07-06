@@ -42,6 +42,7 @@ func NewHandlers(ctx context.Context, cfg *config.Config, log *zap.Logger, datab
 	subs.SetBilling(billing)
 	mandates := service.NewMandateService(clk, repos, nombaClient, webhooks)
 	portal := service.NewPortalService(clk, repos, subs, paymentMethods, mandates, nombaClient, cfg, cfg.PublicBaseURL, webhooks)
+	mandates.SetNotifications(mailer, portal)
 	billing.SetPortal(portal)
 	dunning := service.NewDunningService(clk, repos, invoices, subs, billing, nombaClient, mailer, q.Client, cfg, mandates)
 

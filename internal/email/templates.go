@@ -310,6 +310,31 @@ func PaymentMethodCaptureRequiredHTML(tenantName, planName, captureURL string) (
 	return subject, htmlOut
 }
 
+func DirectDebitReadyHTML(tenantName, planName, portalURL string) (subject, htmlOut string) {
+	subject = "Direct debit is ready"
+	tenant := html.EscapeString(tenantName)
+	planLine := ""
+	if planName != "" {
+		planLine = fmt.Sprintf(` for <strong style="color:%s;">%s</strong>`, colorText, html.EscapeString(planName))
+	}
+	body := fmt.Sprintf(
+		`<p style="margin:0;">Your direct debit mandate with <strong style="color:%s;">%s</strong>%s is active and can be used as a renewal fallback if card payment fails.</p>
+		<p style="margin:16px 0 0;">You can review your billing details anytime from your portal.</p>`,
+		colorText, tenant, planLine,
+	)
+	opts := layoutOpts{
+		eyebrow: "Direct debit ready",
+		heading: "Mandate setup complete",
+		body:    body,
+	}
+	if portalURL != "" {
+		opts.ctaLabel = "Open billing portal"
+		opts.ctaURL = portalURL
+	}
+	htmlOut = emailLayout(opts)
+	return subject, htmlOut
+}
+
 func PaymentMethodCaptureReminderHTML(tenantName, planName, captureURL string, daysUntilBilling int) (subject, htmlOut string) {
 	subject = "Add a card before your subscription renews"
 	tenant := html.EscapeString(tenantName)

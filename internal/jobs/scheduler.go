@@ -5,8 +5,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func RegisterPeriodicTasks(scheduler *asynq.Scheduler) error {
-	entries := []struct {
+func periodicTaskEntries() []struct {
+	cron string
+	task string
+} {
+	return []struct {
 		cron string
 		task string
 	}{
@@ -18,8 +21,10 @@ func RegisterPeriodicTasks(scheduler *asynq.Scheduler) error {
 		{"0 * * * *", TaskSubscriptionExpire},
 		{"0 * * * *", TaskSubscriptionResume},
 	}
+}
 
-	for _, e := range entries {
+func RegisterPeriodicTasks(scheduler *asynq.Scheduler) error {
+	for _, e := range periodicTaskEntries() {
 		task := asynq.NewTask(e.task, nil)
 		if _, err := scheduler.Register(e.cron, task); err != nil {
 			return err

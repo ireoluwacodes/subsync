@@ -73,6 +73,11 @@ type AccountBalanceResult struct {
 	TimeCreated string   `json:"timeCreated"`
 }
 
+// BanksListResults is the data payload from GET /v1/transfers/banks.
+type BanksListResults struct {
+	Results []Bank `json:"results"`
+}
+
 // Bank is a Nigerian bank from GET /v1/transfers/banks.
 type Bank struct {
 	Code    string `json:"code"`

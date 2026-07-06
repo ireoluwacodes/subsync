@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 var (
@@ -16,11 +17,13 @@ type HTTPError struct {
 	StatusCode  int
 	Code        string
 	Description string
+	Errors      []string
+	RawBody     string
 }
 
 func (e *HTTPError) Error() string {
-	if e.Description != "" {
-		return e.Description
+	if msg := e.userMessage(); msg != "" {
+		return msg
 	}
 	return fmt.Sprintf("nomba api error (http %d): %s", e.StatusCode, e.Code)
 }
@@ -33,7 +36,7 @@ func NewHTTPError(statusCode int, apiErr APIError) *HTTPError {
 	return &HTTPError{
 		StatusCode:  statusCode,
 		Code:        apiErr.Code,
-		Description: apiErr.Description,
+		Description: strings.TrimSpace(apiErr.Description),
 	}
 }
 

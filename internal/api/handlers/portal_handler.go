@@ -156,7 +156,8 @@ func (h *PortalHandler) DirectDebitSubmit(c *gin.Context) {
 		CustomerPhone:         c.PostForm("customer_phone"),
 		CustomerAddress:       c.PostForm("customer_address"),
 	}
-	if in.CustomerAccountNumber == "" || in.BankCode == "" || in.CustomerName == "" {
+	if in.CustomerAccountNumber == "" || in.BankCode == "" || in.CustomerName == "" ||
+		in.CustomerAccountName == "" || in.CustomerPhone == "" || strings.TrimSpace(in.CustomerAddress) == "" {
 		c.Redirect(http.StatusSeeOther, "/portal/"+token+"/direct-debit?err=Please+fill+in+all+required+fields")
 		return
 	}
@@ -179,9 +180,14 @@ func (h *PortalHandler) DirectDebitPending(c *gin.Context) {
 	instructions := view.MandateInstructions
 	ready := false
 	mandateStatus := "pending"
+	setupPhase := "validation"
 	if err == nil && status != nil {
 		ready = status.Ready
 		mandateStatus = status.MandateStatus
+		setupPhase = status.SetupPhase
+		if status.NombaStatus != "" {
+			mandateStatus = status.NombaStatus
+		}
 		if status.Instructions != "" {
 			instructions = status.Instructions
 		}
@@ -194,8 +200,9 @@ func (h *PortalHandler) DirectDebitPending(c *gin.Context) {
 		Title:         "Complete direct debit",
 		Token:         token,
 		TenantName:    view.TenantName,
-		Instructions:  instructions,
+		Instructions:  portalpage.ParseMandateInstructions(instructions),
 		MandateStatus: mandateStatus,
+		SetupPhase:    setupPhase,
 		Ready:         ready,
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")

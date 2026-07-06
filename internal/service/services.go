@@ -51,6 +51,7 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 	subs.SetBilling(billing)
 	mandates := NewMandateService(clk, repos, nombaClient, webhooks)
 	portal := NewPortalService(clk, repos, subs, paymentMethods, mandates, nombaClient, cfg, cfg.PublicBaseURL, webhooks)
+	mandates.SetNotifications(mailer, portal)
 	billing.SetPortal(portal)
 	checkout := NewSubscriptionCheckoutService(cfg, clk, repos, invoices, subs, nombaClient, mailer, webhooks)
 	nombaEvents := NewNombaEventService(clk, repos, billing, webhooks, portal)

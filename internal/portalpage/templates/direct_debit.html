@@ -30,11 +30,15 @@
       {{end}}
     </select>
 
-    <label for="customer_phone">Phone number</label>
-    <input id="customer_phone" name="customer_phone" type="tel" autocomplete="tel" required placeholder="08012345678">
+    <p class="field-hint">Only banks that support NIBSS direct debit are listed.</p>
 
-    <label for="customer_address">Address <span style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
-    <input id="customer_address" name="customer_address" autocomplete="street-address">
+    <label for="customer_phone">Phone number</label>
+    <input id="customer_phone" name="customer_phone" type="tel" autocomplete="tel" required placeholder="08012345678 or +2348012345678">
+    <p class="field-hint">Nigerian mobile number linked to your bank account.</p>
+
+    <label for="customer_address">Address</label>
+    <input id="customer_address" name="customer_address" autocomplete="street-address" required placeholder="Street, city">
+    <p class="field-hint">Required for NIBSS mandate registration.</p>
 
     <input type="hidden" name="customer_email" value="{{.CustomerEmail}}">
 

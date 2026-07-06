@@ -4,8 +4,42 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/stretchr/testify/require"
 )
+
+func TestValidateDirectDebitSetupInput_RequiresAddress(t *testing.T) {
+	err := validateDirectDebitSetupInput(DirectDebitSetupInput{
+		CustomerAccountNumber: "0123456789",
+		BankCode:              "058",
+		CustomerName:          "Jane Doe",
+		CustomerAccountName:   "Jane Doe",
+		CustomerPhone:         "08012345678",
+	})
+	require.ErrorIs(t, err, domain.ErrValidation)
+	require.Contains(t, err.Error(), "address")
+
+	err = validateDirectDebitSetupInput(DirectDebitSetupInput{
+		CustomerAccountNumber: "0123456789",
+		BankCode:              "110005",
+		CustomerName:          "Jane Doe",
+		CustomerAccountName:   "Jane Doe",
+		CustomerPhone:         "08012345678",
+		CustomerAddress:       "12 Allen Avenue, Ikeja",
+	})
+	require.ErrorIs(t, err, domain.ErrValidation)
+	require.Contains(t, err.Error(), "NIBSS")
+
+	err = validateDirectDebitSetupInput(DirectDebitSetupInput{
+		CustomerAccountNumber: "0123456789",
+		BankCode:              "058",
+		CustomerName:          "Jane Doe",
+		CustomerAccountName:   "Jane Doe",
+		CustomerPhone:         "08012345678",
+		CustomerAddress:       "12 Allen Avenue, Ikeja",
+	})
+	require.NoError(t, err)
+}
 
 func TestMandateScheduleTimes_UsesNigeriaLocalTime(t *testing.T) {
 	// 2026-07-06 23:45 UTC is 2026-07-07 00:45 WAT — UTC formatting would send a past date.

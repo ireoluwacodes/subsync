@@ -125,8 +125,9 @@ type DirectDebitPendingData struct {
 	FlashMessage  string
 	FlashError    string
 	Token         string
-	Instructions  string
+	Instructions  MandateInstructionsView
 	MandateStatus string
+	SetupPhase    string
 	Ready         bool
 }
 

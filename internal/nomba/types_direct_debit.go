@@ -26,9 +26,9 @@ type CreateMandateRequest struct {
 	CustomerAccountNumber string           `json:"customerAccountNumber"`
 	BankCode              string           `json:"bankCode"`
 	CustomerName          string           `json:"customerName"`
-	CustomerAddress       string           `json:"customerAddress,omitempty"`
+	CustomerAddress       string           `json:"customerAddress"`
 	CustomerAccountName   string           `json:"customerAccountName"`
-	Amount                float64          `json:"amount"`
+	Amount                *float64         `json:"amount,omitempty"`
 	Frequency             MandateFrequency `json:"frequency"`
 	Narration             string           `json:"narration,omitempty"`
 	CustomerPhoneNumber   string           `json:"customerPhoneNumber,omitempty"`
@@ -57,10 +57,24 @@ type MandateStatusResult struct {
 	MandateAdviceStatus   string `json:"mandateAdviceStatus,omitempty"`
 }
 
+func mandateAdviceSent(status string) bool {
+	return status == MandateAdviceSent || status == mandateAdviceSentLegacy
+}
+
+// MandateSetupPhase classifies mandate progress for portal UX.
+func (m MandateStatusResult) MandateSetupPhase() string {
+	if m.MandateReadyForDebit() {
+		return "ready"
+	}
+	if m.MandateStatus == MandateStatusActive {
+		return "bank_advice"
+	}
+	return "validation"
+}
+
 // MandateReadyForDebit reports whether a mandate can be debited per SubSync dunning rules.
 func (m MandateStatusResult) MandateReadyForDebit() bool {
-	return m.MandateStatus == MandateStatusActive &&
-		m.MandateAdviceStatus == MandateAdviceSent
+	return m.MandateStatus == MandateStatusActive && mandateAdviceSent(m.MandateAdviceStatus)
 }
 
 // DebitMandateRequest is the body for POST /v1/direct-debits/debit-mandate.

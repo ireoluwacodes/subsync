@@ -26,10 +26,12 @@ const (
 	HeaderNombaTimestamp          = "nomba-timestamp"
 )
 
-// Mandate status values from GET /v1/direct-debits/status (case-sensitive in responses).
+// Mandate status values from GET /v1/direct-debits/status.
 const (
-	MandateStatusActive = "Active"
-	MandateAdviceSent   = "Advice sent" // verify exact string at integration time
+	MandateStatusActive    = "Active"
+	MandateAdviceSent      = "ADVICE_SENT"
+	MandateAdviceNotSent   = "ADVICE_NOT_SENT"
+	mandateAdviceSentLegacy = "Advice sent" // older Nomba docs / sandbox responses
 )
 
 // Response success code.
