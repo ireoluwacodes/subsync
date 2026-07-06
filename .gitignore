@@ -47,6 +47,10 @@ docker-compose.override.yml
 # Postman MCP (local sync artifacts)
 postman/
 scripts/build_postman_collection.py
+scripts/replay_nomba_webhook.go
+scripts/replay-transfer-webhook.json
 
+# Docs live in https://github.com/ireoluwacodes/subsync-docs
+subsync-docs/
 
 .hintrc
