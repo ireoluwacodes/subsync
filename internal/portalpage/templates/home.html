@@ -9,7 +9,26 @@
     {{if .CancelAtPeriodEnd}}<span class="badge warn">Cancels at period end</span>{{end}}
   </div>
 
-  {{if .AwaitingPaymentMethod}}
+  {{if and .CurrentPeriodStart .CurrentPeriodEnd}}
+  <div class="detail-grid" style="margin-top:1rem;">
+    <div class="detail">
+      <span>Billing period</span>
+      <span>{{.CurrentPeriodStart}} – {{.CurrentPeriodEnd}}</span>
+    </div>
+  </div>
+  {{end}}
+
+  {{if eq .State "canceled"}}
+  <div class="callout" style="margin-top:1rem;">
+    <strong>Subscription canceled.</strong> This subscription is no longer active.
+  </div>
+  {{else if .CancelAtPeriodEnd}}
+  <div class="callout" style="margin-top:1rem;">
+    <strong>Scheduled to cancel.</strong> You keep access until {{.CurrentPeriodEnd}}.
+  </div>
+  {{end}}
+
+  {{if and .AwaitingPaymentMethod .CanManagePaymentMethods}}
   <div class="callout">
     <strong>Action required.</strong> Add a payment method before your next renewal so your subscription stays active.
   </div>
@@ -33,6 +52,7 @@
   {{end}}
 </div>
 
+{{if .CanManagePaymentMethods}}
 <div class="card">
   <div class="section-label">Payment methods</div>
   <h2>Manage how you pay</h2>
@@ -47,13 +67,14 @@
     {{end}}
   </div>
 </div>
+{{end}}
 
-{{if ne .State "canceled"}}
+{{if .ShowCancelForm}}
 <div class="card">
   <div class="section-label">Subscription</div>
   <h2>Cancel subscription</h2>
-  <p class="lead">You can cancel anytime. Access continues until the end of your current billing period unless you choose immediate cancellation.</p>
-  <form method="POST" action="/portal/{{.Token}}/cancel" onsubmit="return confirm('Cancel this subscription?');">
+  <p class="lead">You can cancel anytime. Your access continues until the end of your current billing period{{if .CurrentPeriodEnd}} ({{.CurrentPeriodEnd}}){{end}}.</p>
+  <form method="POST" action="/portal/{{.Token}}/cancel" onsubmit="return confirm('Cancel at the end of your billing period?');">
     <button type="submit" class="btn btn-danger">Cancel subscription</button>
   </form>
 </div>

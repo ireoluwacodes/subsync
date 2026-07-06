@@ -37,6 +37,74 @@ func EffectiveTokenKey(tx WebhookTransaction, tokenized *WebhookTokenizedCardDat
 	return ""
 }
 
+// CardDetailsFromWebhook extracts display-friendly card last4 and brand from Nomba webhook fields.
+func CardDetailsFromWebhook(tx WebhookTransaction, order *WebhookOrder, tokenized *WebhookTokenizedCardData, customer *WebhookCustomer) (last4, brand string) {
+	if order != nil {
+		last4 = strings.TrimSpace(order.CardLast4Digits)
+		brand = strings.TrimSpace(order.CardType)
+	}
+	if tokenized != nil {
+		if brand == "" || IsPlaceholderToken(brand) {
+			brand = strings.TrimSpace(tokenized.CardType)
+		}
+		if last4 == "" || IsPlaceholderToken(last4) {
+			last4 = last4FromPAN(tokenized.CardPan)
+		}
+	}
+	if brand == "" || IsPlaceholderToken(brand) {
+		brand = strings.TrimSpace(tx.CardIssuer)
+	}
+	if customer != nil {
+		if brand == "" || IsPlaceholderToken(brand) {
+			brand = strings.TrimSpace(customer.CardIssuer)
+		}
+		if last4 == "" || IsPlaceholderToken(last4) {
+			last4 = last4FromPAN(customer.CardPan)
+		}
+		if last4 == "" || IsPlaceholderToken(last4) {
+			last4 = last4FromPAN(customer.BillerID)
+		}
+	}
+	return normalizeCardLast4(last4), normalizeCardBrand(brand)
+}
+
+func last4FromPAN(pan string) string {
+	pan = strings.TrimSpace(pan)
+	if pan == "" || IsPlaceholderToken(pan) {
+		return ""
+	}
+	var digits strings.Builder
+	for _, r := range pan {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+	d := digits.String()
+	if len(d) >= 4 {
+		return d[len(d)-4:]
+	}
+	return ""
+}
+
+func normalizeCardLast4(last4 string) string {
+	last4 = strings.TrimSpace(last4)
+	if IsPlaceholderToken(last4) {
+		return ""
+	}
+	if len(last4) > 4 {
+		return last4[len(last4)-4:]
+	}
+	return last4
+}
+
+func normalizeCardBrand(brand string) string {
+	brand = strings.TrimSpace(brand)
+	if IsPlaceholderToken(brand) {
+		return ""
+	}
+	return brand
+}
+
 // IsTransferPayment reports bank-transfer checkout from transaction type and/or order.paymentMethod.
 func IsTransferPayment(tx WebhookTransaction, order *WebhookOrder) bool {
 	if order != nil {

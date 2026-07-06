@@ -73,6 +73,14 @@ type AccountBalanceResult struct {
 	TimeCreated string   `json:"timeCreated"`
 }
 
+// Bank is a Nigerian bank from GET /v1/transfers/banks.
+type Bank struct {
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	NIPCode string `json:"nipCode,omitempty"`
+	Logo    string `json:"logo,omitempty"`
+}
+
 // BankAccountLookupRequest is the body for bank account name lookup.
 type BankAccountLookupRequest struct {
 	AccountNumber string `json:"accountNumber"`

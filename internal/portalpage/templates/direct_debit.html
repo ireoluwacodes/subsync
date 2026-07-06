@@ -17,10 +17,18 @@
     <p class="field-hint">Must match the name on your bank statement.</p>
 
     <label for="customer_account_number">Account number</label>
-    <input id="customer_account_number" name="customer_account_number" inputmode="numeric" pattern="[0-9]+" autocomplete="off" required>
+    <input id="customer_account_number" name="customer_account_number" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="off" required>
 
-    <label for="bank_code">Bank code</label>
-    <input id="bank_code" name="bank_code" inputmode="numeric" pattern="[0-9]+" required placeholder="e.g. 058">
+    <label for="bank_code">Bank</label>
+    {{if .BanksLoadError}}
+    <p class="field-hint" style="color:var(--danger);margin-top:0;">{{.BanksLoadError}}</p>
+    {{end}}
+    <select id="bank_code" name="bank_code" required {{if not .Banks}}disabled{{end}}>
+      <option value="" disabled selected>Select your bank</option>
+      {{range .Banks}}
+      <option value="{{.Code}}">{{.Name}}</option>
+      {{end}}
+    </select>
 
     <label for="customer_phone">Phone number</label>
     <input id="customer_phone" name="customer_phone" type="tel" autocomplete="tel" required placeholder="08012345678">

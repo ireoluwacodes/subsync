@@ -242,12 +242,12 @@ func (h *SubscriptionHandler) PreviewUpgrade(c *gin.Context) {
 		dto.RespondError(c, dto.NewBindError("invalid new_plan_id"))
 		return
 	}
-	result, err := h.svc.PreviewUpgrade(c.Request.Context(), tenant.ID, id, service.UpgradeInput{NewPlanID: planID})
+	result, currency, err := h.svc.PreviewUpgrade(c.Request.Context(), tenant.ID, id, service.UpgradeInput{NewPlanID: planID})
 	if err != nil {
 		dto.RespondError(c, err)
 		return
 	}
-	dto.RespondOK(c, result)
+	dto.RespondOK(c, dto.ProrationToResponse(result, currency))
 }
 
 func (h *SubscriptionHandler) Transitions(c *gin.Context) {

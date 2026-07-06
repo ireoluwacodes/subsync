@@ -3,7 +3,7 @@
   "info": {
     "title": "SubSync Integrator API",
     "version": "1.0.0",
-    "description": "Server-to-server API for Nomba-powered merchants. Authenticate with `Authorization: Bearer ssk_...` on all routes below. Dashboard-only routes (auth, settings, analytics, /me) are not listed here."
+    "description": "Server-to-server API for Nomba-powered merchants. Authenticate with `Authorization: Bearer ssk_...` on all routes below. Dashboard-only routes (auth, settings, analytics, /me) are not listed here.\n\n## Money\n\nAll monetary integer fields (`amount`, `amount_due`, `amount_paid`, `mrr`, `mrr_estimate`, proration amounts, etc.) are in the currency's **minor unit** (kobo for `NGN`). Divide by 100 for major units. Example: `100000` with `NGN` is ₦1,000.00.\n\nResponses may include paired `*_display` strings (e.g. `amount_display`) formatted for UI. Use minor-unit integers for billing logic; use `*_display` for presentation only."
   },
   "servers": [{ "url": "/api/v1" }],
   "paths": {
@@ -535,6 +535,79 @@
       }
     },
     "schemas": {
+      "MoneyMinorAmount": {
+        "type": "integer",
+        "format": "int64",
+        "description": "Amount in the currency's minor unit (kobo for NGN). Example: 100000 = ₦1,000.00.",
+        "example": 100000
+      },
+      "MoneyDisplay": {
+        "type": "string",
+        "description": "Human-readable major-unit string for UI display, computed from the paired minor-unit field.",
+        "example": "₦1000"
+      },
+      "CurrencyCode": {
+        "type": "string",
+        "description": "ISO 4217 currency code.",
+        "example": "NGN"
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "amount": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "amount_display": { "$ref": "#/components/schemas/MoneyDisplay" },
+          "currency": { "$ref": "#/components/schemas/CurrencyCode" },
+          "name": { "type": "string" },
+          "interval": { "type": "string", "enum": ["monthly", "annual", "custom"] }
+        }
+      },
+      "CreatePlanRequest": {
+        "type": "object",
+        "required": ["name", "amount", "interval"],
+        "properties": {
+          "name": { "type": "string" },
+          "amount": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "currency": { "$ref": "#/components/schemas/CurrencyCode" },
+          "interval": { "type": "string", "enum": ["monthly", "annual", "custom"] },
+          "trial_days": { "type": "integer" }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "amount_due": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "amount_due_display": { "$ref": "#/components/schemas/MoneyDisplay" },
+          "amount_paid": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "amount_paid_display": { "$ref": "#/components/schemas/MoneyDisplay" },
+          "currency": { "$ref": "#/components/schemas/CurrencyCode" },
+          "status": { "type": "string" }
+        }
+      },
+      "PlanStats": {
+        "type": "object",
+        "properties": {
+          "active_subscribers": { "type": "integer" },
+          "mrr_estimate": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "mrr_estimate_display": { "$ref": "#/components/schemas/MoneyDisplay" },
+          "currency": { "$ref": "#/components/schemas/CurrencyCode" }
+        }
+      },
+      "ProrationPreview": {
+        "type": "object",
+        "properties": {
+          "credit_amount": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "credit_amount_display": { "$ref": "#/components/schemas/MoneyDisplay" },
+          "debit_amount": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "debit_amount_display": { "$ref": "#/components/schemas/MoneyDisplay" },
+          "net_amount": { "$ref": "#/components/schemas/MoneyMinorAmount" },
+          "net_amount_display": { "$ref": "#/components/schemas/MoneyDisplay" },
+          "currency": { "$ref": "#/components/schemas/CurrencyCode" },
+          "days_remaining": { "type": "integer" },
+          "total_days": { "type": "integer" }
+        }
+      },
       "Envelope": {
         "type": "object",
         "properties": {

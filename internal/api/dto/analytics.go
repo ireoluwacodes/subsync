@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type AnalyticsDateRangeParams struct {
@@ -33,9 +34,10 @@ func (p AnalyticsDateRangeParams) ParseRange(defaultFrom, defaultTo time.Time) (
 }
 
 type AnalyticsMRRResponse struct {
-	MRR      int64  `json:"mrr"`
-	Currency string `json:"currency"`
-	Active   int64  `json:"active_subscriptions"`
+	MRR         int64  `json:"mrr"`
+	MRRDisplay  string `json:"mrr_display"`
+	Currency    string `json:"currency"`
+	Active      int64  `json:"active_subscriptions"`
 }
 
 type AnalyticsChurnResponse struct {
@@ -56,13 +58,15 @@ type AnalyticsDunningResponse struct {
 }
 
 type RevenueDailyPointResponse struct {
-	Date   string `json:"date"`
-	Amount int64  `json:"amount"`
+	Date          string `json:"date"`
+	Amount        int64  `json:"amount"`
+	AmountDisplay string `json:"amount_display"`
 }
 
 type AnalyticsRevenueResponse struct {
-	Total    int64                       `json:"total"`
-	Currency string                      `json:"currency"`
+	Total         int64                       `json:"total"`
+	TotalDisplay  string                      `json:"total_display"`
+	Currency      string                      `json:"currency"`
 	From     string                      `json:"from"`
 	To       string                      `json:"to"`
 	Daily    []RevenueDailyPointResponse `json:"daily"`
@@ -70,9 +74,10 @@ type AnalyticsRevenueResponse struct {
 
 func AnalyticsMRRToResponse(r *domain.AnalyticsMRRResult) AnalyticsMRRResponse {
 	return AnalyticsMRRResponse{
-		MRR:      r.MRR,
-		Currency: r.Currency,
-		Active:   r.Active,
+		MRR:        r.MRR,
+		MRRDisplay: utils.FormatMoneyDisplay(r.MRR, r.Currency),
+		Currency:   r.Currency,
+		Active:     r.Active,
 	}
 }
 
@@ -100,11 +105,16 @@ func AnalyticsDunningToResponse(r *domain.AnalyticsDunningResult) AnalyticsDunni
 func AnalyticsRevenueToResponse(r *domain.AnalyticsRevenueResult) AnalyticsRevenueResponse {
 	daily := make([]RevenueDailyPointResponse, len(r.Daily))
 	for i, d := range r.Daily {
-		daily[i] = RevenueDailyPointResponse{Date: d.Date, Amount: d.Amount}
+		daily[i] = RevenueDailyPointResponse{
+			Date:          d.Date,
+			Amount:        d.Amount,
+			AmountDisplay: utils.FormatMoneyDisplay(d.Amount, r.Currency),
+		}
 	}
 	return AnalyticsRevenueResponse{
-		Total:    r.Total,
-		Currency: r.Currency,
+		Total:        r.Total,
+		TotalDisplay: utils.FormatMoneyDisplay(r.Total, r.Currency),
+		Currency:     r.Currency,
 		From:     r.From.Format("2006-01-02"),
 		To:       r.To.Format("2006-01-02"),
 		Daily:    daily,

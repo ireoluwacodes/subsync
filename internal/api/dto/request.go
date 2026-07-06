@@ -233,68 +233,6 @@ func SubscriptionToResponse(s *domain.Subscription) SubscriptionResponse {
 	return resp
 }
 
-type InvoiceResponse struct {
-	ID             string `json:"id"`
-	TenantID       string `json:"tenant_id"`
-	SubscriptionID string `json:"subscription_id"`
-	CustomerID     string `json:"customer_id"`
-	Status         string `json:"status"`
-	AmountDue      int64  `json:"amount_due"`
-	AmountPaid     int64  `json:"amount_paid"`
-	Currency       string `json:"currency"`
-	CreatedAt      string `json:"created_at"`
-}
-
-func InvoiceToResponse(inv *domain.Invoice) InvoiceResponse {
-	return InvoiceResponse{
-		ID:             inv.ID.String(),
-		TenantID:       inv.TenantID.String(),
-		SubscriptionID: inv.SubscriptionID.String(),
-		CustomerID:     inv.CustomerID.String(),
-		Status:         string(inv.Status),
-		AmountDue:      inv.AmountDue,
-		AmountPaid:     inv.AmountPaid,
-		Currency:       inv.Currency,
-		CreatedAt:      inv.CreatedAt.Format(time.RFC3339),
-	}
-}
-
-type PlanResponse struct {
-	ID           string              `json:"id"`
-	TenantID     string              `json:"tenant_id"`
-	Name         string              `json:"name"`
-	Description  string              `json:"description"`
-	Amount       int64               `json:"amount"`
-	Currency     string              `json:"currency"`
-	Interval     domain.PlanInterval `json:"interval"`
-	IntervalDays *int                `json:"interval_days,omitempty"`
-	TrialDays    int                 `json:"trial_days"`
-	Features     []string            `json:"features"`
-	IsActive     bool                `json:"is_active"`
-	IsArchived   bool                `json:"is_archived"`
-	CreatedAt    string              `json:"created_at"`
-	UpdatedAt    string              `json:"updated_at"`
-}
-
-func PlanToResponse(p *domain.Plan) PlanResponse {
-	return PlanResponse{
-		ID:           p.ID.String(),
-		TenantID:     p.TenantID.String(),
-		Name:         p.Name,
-		Description:  p.Description,
-		Amount:       p.Amount,
-		Currency:     p.Currency,
-		Interval:     p.Interval,
-		IntervalDays: p.IntervalDays,
-		TrialDays:    p.TrialDays,
-		Features:     p.Features,
-		IsActive:     p.IsActive,
-		IsArchived:   p.IsArchived,
-		CreatedAt:    p.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:    p.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	}
-}
-
 func PlansToResponse(plans []*domain.Plan) []PlanResponse {
 	out := make([]PlanResponse, len(plans))
 	for i, p := range plans {

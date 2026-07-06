@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -118,8 +119,12 @@ type PortalHomeView struct {
 	PlanName              string               `json:"plan_name"`
 	CustomerEmail         string               `json:"customer_email"`
 	TenantName            string               `json:"tenant_name"`
-	CancelAtPeriodEnd     bool                 `json:"cancel_at_period_end"`
-	LatestInvoice         *domain.Invoice      `json:"latest_invoice,omitempty"`
+	CancelAtPeriodEnd       bool                 `json:"cancel_at_period_end"`
+	CurrentPeriodStart      string               `json:"current_period_start"`
+	CurrentPeriodEnd        string               `json:"current_period_end"`
+	CanManagePaymentMethods bool                 `json:"can_manage_payment_methods"`
+	ShowCancelForm          bool                 `json:"show_cancel_form"`
+	LatestInvoice           *domain.Invoice      `json:"latest_invoice,omitempty"`
 	PaymentMethodLast4    string               `json:"payment_method_last4,omitempty"`
 	PaymentMethodBrand    string               `json:"payment_method_brand,omitempty"`
 	AwaitingPaymentMethod bool                 `json:"awaiting_payment_method"`
@@ -154,13 +159,20 @@ func (s *PortalService) Home(ctx context.Context, rawToken string) (*PortalHomeV
 	}
 
 	view := &PortalHomeView{
-		Subscription:      sub,
-		PlanName:          plan.Name,
-		CustomerEmail:     customer.Email,
-		TenantName:        tenant.Name,
-		CancelAtPeriodEnd: sub.CancelAtPeriodEnd,
+		Subscription:            sub,
+		PlanName:                plan.Name,
+		CustomerEmail:           customer.Email,
+		TenantName:              tenant.Name,
+		CancelAtPeriodEnd:       sub.CancelAtPeriodEnd,
+		CurrentPeriodStart:      formatPortalDate(sub.CurrentPeriodStart),
+		CurrentPeriodEnd:        formatPortalDate(sub.CurrentPeriodEnd),
+		CanManagePaymentMethods: subscriptionPortalCanManagePaymentMethods(sub),
+		ShowCancelForm:          subscriptionPortalShowCancel(sub),
 	}
 	s.enrichPaymentMethodView(ctx, pt.TenantID, sub, view)
+	if !view.CanManagePaymentMethods {
+		view.AwaitingPaymentMethod = false
+	}
 
 	inv, err := s.repos.Invoices.GetOpenBySubscription(ctx, pt.TenantID, sub.ID)
 	if err == nil {
@@ -338,6 +350,32 @@ func (s *PortalService) StartDirectDebitSetup(ctx context.Context, rawToken stri
 	return s.mandates.CreateForSubscription(ctx, tenant, sub, plan, customer, in)
 }
 
+func (s *PortalService) ListBanksForPortal(ctx context.Context, rawToken string) ([]nomba.Bank, error) {
+	pt, err := s.resolveToken(ctx, rawToken)
+	if err != nil {
+		return nil, err
+	}
+	tenant, err := s.repos.Tenants.GetByID(ctx, pt.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repos.Tenants.LoadNombaSecret(ctx, tenant); err != nil {
+		return nil, err
+	}
+	banks, err := s.nomba.ListBanks(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	sortBanksByName(banks)
+	return banks, nil
+}
+
+func sortBanksByName(banks []nomba.Bank) {
+	sort.Slice(banks, func(i, j int) bool {
+		return strings.ToLower(banks[i].Name) < strings.ToLower(banks[j].Name)
+	})
+}
+
 func (s *PortalService) GetDirectDebitStatus(ctx context.Context, rawToken string) (*DirectDebitStatusResult, error) {
 	pt, err := s.resolveToken(ctx, rawToken)
 	if err != nil {
@@ -368,7 +406,15 @@ func (s *PortalService) GetDirectDebitStatus(ctx context.Context, rawToken strin
 	return out, nil
 }
 
-func (s *PortalService) HandlePaymentSuccess(ctx context.Context, tenantID uuid.UUID, orderRef, tokenKey string, tx nomba.WebhookTransaction) error {
+func (s *PortalService) HandlePaymentSuccess(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	orderRef, tokenKey string,
+	tx nomba.WebhookTransaction,
+	order *nomba.WebhookOrder,
+	tokenized *nomba.WebhookTokenizedCardData,
+	customer *nomba.WebhookCustomer,
+) error {
 	if !strings.HasPrefix(orderRef, "portal-") {
 		return nil
 	}
@@ -386,19 +432,20 @@ func (s *PortalService) HandlePaymentSuccess(ctx context.Context, tenantID uuid.
 	}
 
 	if tokenKey == "" {
-		tokenKey = tx.TokenKey
+		tokenKey = nomba.EffectiveTokenKey(tx, tokenized)
 	}
 	if tokenKey == "" {
 		return fmt.Errorf("%w: missing tokenKey for portal payment method update", domain.ErrValidation)
 	}
 
+	cardLast4, cardBrand := nomba.CardDetailsFromWebhook(tx, order, tokenized, customer)
 	setDefault := !s.pmResolver.CustomerHasDefaultCard(ctx, tenantID, token.CustomerID)
 	pm, err := s.paymentMethod.Create(ctx, tenantID, CreatePaymentMethodInput{
 		CustomerID: token.CustomerID,
 		Type:       domain.PaymentMethodTokenizedCard,
 		TokenKey:   tokenKey,
-		CardLast4:  "",
-		CardBrand:  "",
+		CardLast4:  cardLast4,
+		CardBrand:  cardBrand,
 		IsDefault:  setDefault,
 	})
 	if err != nil {
@@ -443,4 +490,36 @@ func (s *PortalService) resolveToken(ctx context.Context, rawToken string) (*dom
 		return nil, fmt.Errorf("%w: missing portal token", domain.ErrValidation)
 	}
 	return s.repos.PortalTokens.GetValidByTokenHash(ctx, utils.HashResetSecret(rawToken))
+}
+
+func formatPortalDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	loc, err := time.LoadLocation("Africa/Lagos")
+	if err != nil {
+		loc = time.FixedZone("WAT", 1*60*60)
+	}
+	return t.In(loc).Format("2 Jan 2006")
+}
+
+func subscriptionPortalCanManagePaymentMethods(sub *domain.Subscription) bool {
+	switch sub.State {
+	case domain.SubscriptionStateActive, domain.SubscriptionStateTrialing, domain.SubscriptionStatePastDue, domain.SubscriptionStateIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+func subscriptionPortalShowCancel(sub *domain.Subscription) bool {
+	if sub.CancelAtPeriodEnd {
+		return false
+	}
+	switch sub.State {
+	case domain.SubscriptionStateActive, domain.SubscriptionStateTrialing, domain.SubscriptionStatePastDue:
+		return true
+	default:
+		return false
+	}
 }

@@ -97,11 +97,13 @@ func (s *NombaEventService) dispatch(ctx context.Context, tenantID uuid.UUID, ev
 func (s *NombaEventService) handlePaymentSuccess(ctx context.Context, tenantID uuid.UUID, event nomba.WebhookEvent) error {
 	tx := event.Data.Transaction
 	order := event.Data.Order
-	tokenKey := nomba.EffectiveTokenKey(tx, event.Data.TokenizedCardData)
+	tokenized := event.Data.TokenizedCardData
+	customer := event.Data.Customer
+	tokenKey := nomba.EffectiveTokenKey(tx, tokenized)
 	orderRef := nomba.CheckoutOrderReference(tx, order)
 
 	if strings.HasPrefix(orderRef, "portal-") {
-		return s.portal.HandlePaymentSuccess(ctx, tenantID, orderRef, tokenKey, tx)
+		return s.portal.HandlePaymentSuccess(ctx, tenantID, orderRef, tokenKey, tx, order, tokenized, &customer)
 	}
 
 	inv, err := s.matchInvoice(ctx, tenantID, orderRef, tx.TransactionID)
@@ -116,15 +118,15 @@ func (s *NombaEventService) handlePaymentSuccess(ctx context.Context, tenantID u
 	}
 
 	if inv != nil && IsSubscriptionCheckoutInvoice(inv) {
-		return s.billing.CompleteCheckoutFromWebhook(ctx, tenantID, inv, tokenKey, tx.TransactionID, tx, order)
+		return s.billing.CompleteCheckoutFromWebhook(ctx, tenantID, inv, tokenKey, tx.TransactionID, tx, order, tokenized, &customer)
 	}
 
 	if subID, ok := ParseCheckoutSubscriptionID(orderRef); ok {
-		return s.billing.CompleteTrialCheckoutFromWebhook(ctx, tenantID, subID, tokenKey, tx.TransactionID, tx, order)
+		return s.billing.CompleteTrialCheckoutFromWebhook(ctx, tenantID, subID, tokenKey, tx.TransactionID, tx, order, tokenized, &customer)
 	}
 
 	if subID, ok := ParseCardCaptureSubscriptionID(orderRef); ok {
-		return s.billing.CompleteCardCaptureFromWebhook(ctx, tenantID, subID, tokenKey, tx)
+		return s.billing.CompleteCardCaptureFromWebhook(ctx, tenantID, subID, tokenKey, tx, order, tokenized, &customer)
 	}
 
 	if inv == nil && orderRef == "" {

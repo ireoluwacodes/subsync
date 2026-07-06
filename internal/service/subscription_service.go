@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/email"
 	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
@@ -15,9 +16,11 @@ type SubscriptionService struct {
 	repo      domain.SubscriptionRepository
 	plans     domain.PlanRepository
 	customers domain.CustomerRepository
+	tenants   domain.TenantRepository
 	invoices  *InvoiceService
 	webhooks  *WebhookService
 	billing   *BillingService
+	mailer    *email.MailerService
 }
 
 func NewSubscriptionService(
@@ -32,6 +35,11 @@ func NewSubscriptionService(
 
 func (s *SubscriptionService) SetBilling(billing *BillingService) {
 	s.billing = billing
+}
+
+func (s *SubscriptionService) SetNotifications(tenants domain.TenantRepository, mailer *email.MailerService) {
+	s.tenants = tenants
+	s.mailer = mailer
 }
 
 type CreateSubscriptionInput struct {
@@ -198,6 +206,7 @@ func (s *SubscriptionService) Cancel(ctx context.Context, tenantID, id uuid.UUID
 		if err := s.repo.Update(ctx, sub); err != nil {
 			return nil, err
 		}
+		s.notifyCancelScheduled(ctx, tenantID, sub)
 		return sub, nil
 	}
 
@@ -210,7 +219,69 @@ func (s *SubscriptionService) Cancel(ctx context.Context, tenantID, id uuid.UUID
 	sub.CanceledAt = &now
 	sub.CancelAtPeriodEnd = false
 
-	return s.applyTransition(ctx, sub, from, domain.SubscriptionStateCanceled, in.Reason, actor)
+	sub, err = s.applyTransition(ctx, sub, from, domain.SubscriptionStateCanceled, in.Reason, actor)
+	if err != nil {
+		return nil, err
+	}
+	if in.Reason != "dunning_exhausted" {
+		s.notifyCanceled(ctx, tenantID, sub, in.Reason)
+	}
+	return sub, nil
+}
+
+func (s *SubscriptionService) notifyCancelScheduled(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription) {
+	if s.mailer == nil || s.tenants == nil {
+		return
+	}
+	tenant, customer, plan, ok := s.lookupCancelEmailContext(ctx, tenantID, sub)
+	if !ok {
+		return
+	}
+	subject, html := email.SubscriptionCancelScheduledHTML(tenant.Name, plan.Name, subscriptionEmailDate(sub.CurrentPeriodEnd))
+	_ = s.mailer.Send(ctx, customer.Email, subject, html)
+}
+
+func (s *SubscriptionService) notifyCanceled(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, reason string) {
+	if s.mailer == nil || s.tenants == nil {
+		return
+	}
+	tenant, customer, plan, ok := s.lookupCancelEmailContext(ctx, tenantID, sub)
+	if !ok {
+		return
+	}
+	accessEnd := ""
+	if reason == "period_ended" {
+		accessEnd = subscriptionEmailDate(sub.CurrentPeriodEnd)
+	}
+	subject, html := email.SubscriptionCanceledHTML(tenant.Name, plan.Name, accessEnd, reason)
+	_ = s.mailer.Send(ctx, customer.Email, subject, html)
+}
+
+func (s *SubscriptionService) lookupCancelEmailContext(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription) (*domain.Tenant, *domain.Customer, *domain.Plan, bool) {
+	tenant, err := s.tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, nil, nil, false
+	}
+	customer, err := s.customers.GetByID(ctx, tenantID, sub.CustomerID)
+	if err != nil {
+		return nil, nil, nil, false
+	}
+	plan, err := s.plans.GetByID(ctx, tenantID, sub.PlanID)
+	if err != nil {
+		return nil, nil, nil, false
+	}
+	return tenant, customer, plan, true
+}
+
+func subscriptionEmailDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	loc, err := time.LoadLocation("Africa/Lagos")
+	if err != nil {
+		loc = time.FixedZone("WAT", 1*60*60)
+	}
+	return t.In(loc).Format("2 Jan 2006")
 }
 
 func (s *SubscriptionService) Pause(ctx context.Context, tenantID, id uuid.UUID, pauseEndsAt *time.Time, actor string) (*domain.Subscription, error) {
@@ -250,22 +321,22 @@ type UpgradeInput struct {
 	NewPlanID uuid.UUID
 }
 
-func (s *SubscriptionService) PreviewUpgrade(ctx context.Context, tenantID, id uuid.UUID, in UpgradeInput) (*domain.ProrationResult, error) {
+func (s *SubscriptionService) PreviewUpgrade(ctx context.Context, tenantID, id uuid.UUID, in UpgradeInput) (*domain.ProrationResult, string, error) {
 	sub, err := s.repo.GetByID(ctx, tenantID, id)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	oldPlan, err := s.plans.GetByID(ctx, tenantID, sub.PlanID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	newPlan, err := s.plans.GetByID(ctx, tenantID, in.NewPlanID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	result := domain.CalculateProration(oldPlan.Amount, newPlan.Amount, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, time.Now().UTC())
-	return &result, nil
+	return &result, newPlan.Currency, nil
 }
 
 func (s *SubscriptionService) Upgrade(ctx context.Context, tenantID, id uuid.UUID, in UpgradeInput, actor string) (*domain.Subscription, *domain.Invoice, error) {

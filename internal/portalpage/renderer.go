@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"html/template"
 	"io"
+
+	"github.com/ireoluwacodes/subsync/internal/nomba"
 )
 
 //go:embed templates/layout.html
@@ -72,8 +74,12 @@ type HomeData struct {
 	PlanName               string
 	CustomerEmail          string
 	State                  string
-	CancelAtPeriodEnd      bool
-	AwaitingPaymentMethod  bool
+	CancelAtPeriodEnd       bool
+	CurrentPeriodStart      string
+	CurrentPeriodEnd        string
+	CanManagePaymentMethods bool
+	ShowCancelForm          bool
+	AwaitingPaymentMethod   bool
 	HasCard                bool
 	HasMandate             bool
 	MandateStatus          string
@@ -85,14 +91,32 @@ type HomeData struct {
 }
 
 type DirectDebitFormData struct {
-	Title         string
-	TenantName    string
-	FlashMessage  string
-	FlashError    string
-	Token         string
-	PlanName      string
-	CustomerEmail string
-	CustomerName  string
+	Title          string
+	TenantName     string
+	FlashMessage   string
+	FlashError     string
+	Token          string
+	PlanName       string
+	CustomerEmail  string
+	CustomerName   string
+	Banks          []PortalBank
+	BanksLoadError string
+}
+
+type PortalBank struct {
+	Code string
+	Name string
+}
+
+func BanksFromNomba(banks []nomba.Bank) []PortalBank {
+	out := make([]PortalBank, 0, len(banks))
+	for _, b := range banks {
+		if b.Code == "" || b.Name == "" {
+			continue
+		}
+		out = append(out, PortalBank{Code: b.Code, Name: b.Name})
+	}
+	return out
 }
 
 type DirectDebitPendingData struct {

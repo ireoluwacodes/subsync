@@ -9,7 +9,9 @@ const (
 	PathCheckoutVerify    = "/v1/checkout/transactions"
 	PathDirectDebitCreate = "/v1/direct-debits"
 	PathDirectDebitStatus = "/v1/direct-debits/status"
-	PathDirectDebitDebit  = "/v1/direct-debits/debit-mandate"
+	PathDirectDebitDebit   = "/v1/direct-debits/debit-mandate"
+	PathTransfersBanks     = "/v1/transfers/banks"
+	PathTransfersBankLookup = "/v1/transfers/bank/lookup"
 	PathSubAccountTransfer = "/v2/transfers/bank/%s" // fmt with subAccountId
 )
 

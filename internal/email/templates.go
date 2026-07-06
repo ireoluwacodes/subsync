@@ -192,6 +192,54 @@ func DunningFinalHTML(tenantName string) (subject, htmlOut string) {
 	return subject, htmlOut
 }
 
+func SubscriptionCancelScheduledHTML(tenantName, planName, accessUntil string) (subject, htmlOut string) {
+	subject = "Your subscription cancellation is confirmed"
+	tenant := html.EscapeString(tenantName)
+	plan := html.EscapeString(planName)
+	when := html.EscapeString(accessUntil)
+	body := fmt.Sprintf(
+		`<p style="margin:0;">Your <strong style="color:%s;">%s</strong> subscription with <strong style="color:%s;">%s</strong> is scheduled to cancel.</p>
+		<p style="margin:16px 0 0;">You keep access until <strong style="color:%s;">%s</strong>. You will not be charged again after that date.</p>`,
+		colorText, plan, colorText, tenant, colorText, when,
+	)
+	htmlOut = emailLayout(layoutOpts{
+		eyebrow: "Cancellation scheduled",
+		heading: "Cancellation confirmed",
+		body:    body,
+		accent:  colorWarn,
+	})
+	return subject, htmlOut
+}
+
+func SubscriptionCanceledHTML(tenantName, planName, accessEndDate, reason string) (subject, htmlOut string) {
+	subject = "Your subscription has been canceled"
+	tenant := html.EscapeString(tenantName)
+	plan := html.EscapeString(planName)
+	var detail string
+	switch reason {
+	case "period_ended":
+		if accessEndDate != "" {
+			detail = fmt.Sprintf(`<p style="margin:16px 0 0;">Your access ended on <strong style="color:%s;">%s</strong>.</p>`, colorText, html.EscapeString(accessEndDate))
+		}
+	case "no_payment_method_at_renewal":
+		detail = `<p style="margin:16px 0 0;">We could not renew your subscription because no chargeable payment method was saved.</p>`
+	default:
+		detail = `<p style="margin:16px 0 0;">Your subscription is no longer active.</p>`
+	}
+	body := fmt.Sprintf(
+		`<p style="margin:0;">Your <strong style="color:%s;">%s</strong> subscription with <strong style="color:%s;">%s</strong> has been canceled.</p>%s
+		<p style="margin:16px 0 0;">You can resubscribe at any time when you're ready.</p>`,
+		colorText, plan, colorText, tenant, detail,
+	)
+	htmlOut = emailLayout(layoutOpts{
+		eyebrow: "Subscription ended",
+		heading: "Subscription canceled",
+		body:    body,
+		accent:  colorMuted,
+	})
+	return subject, htmlOut
+}
+
 func SubscriptionConfirmedHTML(tenantName string, amount int64, currency, portalURL string) (subject, htmlOut string) {
 	subject = "Payment received — thank you"
 	tenant := html.EscapeString(tenantName)

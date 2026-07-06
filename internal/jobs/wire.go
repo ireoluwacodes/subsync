@@ -35,6 +35,7 @@ func NewHandlers(ctx context.Context, cfg *config.Config, log *zap.Logger, datab
 	webhooks := service.NewWebhookService(repos.Webhooks, repos.Tenants, q.Client, cfg)
 	invoices.SetWebhooks(webhooks)
 	subs := service.NewSubscriptionService(repos.Subscriptions, repos.Plans, repos.Customers, invoices, webhooks)
+	subs.SetNotifications(repos.Tenants, mailer)
 	billing := service.NewBillingService(cfg, clk, repos, invoices, subs, mailer, q.Client, webhooks)
 	paymentMethods := service.NewPaymentMethodService(repos.PaymentMethods, repos.Customers, webhooks)
 	billing.SetPaymentMethods(paymentMethods)

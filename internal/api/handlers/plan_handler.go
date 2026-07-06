@@ -118,10 +118,7 @@ func (h *PlanHandler) Stats(c *gin.Context) {
 		dto.RespondError(c, err)
 		return
 	}
-	dto.RespondOK(c, gin.H{
-		"active_subscribers": count,
-		"mrr_estimate":       plan.Amount * count,
-	})
+	dto.RespondOK(c, dto.PlanStatsToResponse(count, plan.Amount*count, plan.Currency))
 }
 
 func (h *PlanHandler) Update(c *gin.Context) {

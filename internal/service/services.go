@@ -42,6 +42,7 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 	webhooks := NewWebhookService(repos.Webhooks, repos.Tenants, publisher, cfg)
 	invoices.SetWebhooks(webhooks)
 	subs := NewSubscriptionService(repos.Subscriptions, repos.Plans, repos.Customers, invoices, webhooks)
+	subs.SetNotifications(repos.Tenants, mailer)
 	paymentMethods := NewPaymentMethodService(repos.PaymentMethods, repos.Customers, webhooks)
 
 	tenants := NewTenantService(repos.Tenants, nombaClient)

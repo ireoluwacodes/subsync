@@ -35,12 +35,15 @@ type WebhookOrder struct {
 	OrderMetaData          map[string]string `json:"orderMetaData,omitempty"`
 	CustomerEmail          string            `json:"customerEmail,omitempty"`
 	IsTokenizedCardPayment string            `json:"isTokenizedCardPayment,omitempty"`
+	CardLast4Digits        string            `json:"cardLast4Digits,omitempty"`
+	CardType               string            `json:"cardType,omitempty"`
 }
 
 // WebhookTokenizedCardData may carry card token fields (often "N/A" for transfers).
 type WebhookTokenizedCardData struct {
 	TokenKey string `json:"tokenKey,omitempty"`
 	CardType string `json:"cardType,omitempty"`
+	CardPan  string `json:"cardPan,omitempty"`
 }
 
 type WebhookMerchant struct {
@@ -62,6 +65,7 @@ type WebhookTransaction struct {
 	Narration             string  `json:"narration,omitempty"`
 	OriginatingFrom       string  `json:"originatingFrom,omitempty"`
 	TokenKey              string  `json:"tokenKey,omitempty"`
+	CardIssuer            string  `json:"cardIssuer,omitempty"`
 	AliasAccountNumber    string  `json:"aliasAccountNumber,omitempty"`
 	AliasAccountName      string  `json:"aliasAccountName,omitempty"`
 	AliasAccountReference string  `json:"aliasAccountReference,omitempty"`
@@ -77,6 +81,7 @@ type WebhookCustomer struct {
 	CardPan       string `json:"cardPan,omitempty"`
 	CardIssuer    string `json:"cardIssuer,omitempty"`
 	CardBank      string `json:"cardBank,omitempty"`
+	BillerID      string `json:"billerId,omitempty"`
 	ProductID     string `json:"productId,omitempty"`
 }
 

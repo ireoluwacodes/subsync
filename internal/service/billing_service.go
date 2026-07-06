@@ -431,6 +431,8 @@ func (s *BillingService) CompleteCheckoutFromWebhook(
 	tokenKey, transactionID string,
 	tx nomba.WebhookTransaction,
 	order *nomba.WebhookOrder,
+	tokenized *nomba.WebhookTokenizedCardData,
+	webhookCustomer *nomba.WebhookCustomer,
 ) error {
 	if inv == nil {
 		return fmt.Errorf("%w: checkout invoice required", domain.ErrValidation)
@@ -466,7 +468,7 @@ func (s *BillingService) CompleteCheckoutFromWebhook(
 		return err
 	}
 
-	if err := s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, inv, &tokenKey, transactionID, tx, order); err != nil {
+	if err := s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, inv, &tokenKey, transactionID, tx, order, tokenized, webhookCustomer); err != nil {
 		return err
 	}
 
@@ -488,6 +490,8 @@ func (s *BillingService) CompleteTrialCheckoutFromWebhook(
 	tokenKey, transactionID string,
 	tx nomba.WebhookTransaction,
 	order *nomba.WebhookOrder,
+	tokenized *nomba.WebhookTokenizedCardData,
+	webhookCustomer *nomba.WebhookCustomer,
 ) error {
 	sub, err := s.repos.Subscriptions.GetByID(ctx, tenantID, subscriptionID)
 	if err != nil {
@@ -512,7 +516,7 @@ func (s *BillingService) CompleteTrialCheckoutFromWebhook(
 		return err
 	}
 
-	return s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, nil, &tokenKey, transactionID, tx, order)
+	return s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, nil, &tokenKey, transactionID, tx, order, tokenized, webhookCustomer)
 }
 
 func (s *BillingService) activateCheckoutSubscription(
@@ -526,6 +530,8 @@ func (s *BillingService) activateCheckoutSubscription(
 	transactionID string,
 	tx nomba.WebhookTransaction,
 	order *nomba.WebhookOrder,
+	tokenized *nomba.WebhookTokenizedCardData,
+	webhookCustomer *nomba.WebhookCustomer,
 ) error {
 	key := ""
 	if tokenKey != nil {
@@ -551,7 +557,7 @@ func (s *BillingService) activateCheckoutSubscription(
 		if s.paymentMethods == nil {
 			return fmt.Errorf("%w: payment method service not configured", domain.ErrValidation)
 		}
-		cardLast4, cardBrand := cardDetailsFromTransaction(tx)
+		cardLast4, cardBrand := nomba.CardDetailsFromWebhook(tx, order, tokenized, webhookCustomer)
 		setDefault := true
 		if s.pmResolver != nil {
 			setDefault = !s.pmResolver.CustomerHasDefaultCard(ctx, sub.TenantID, sub.CustomerID)
@@ -624,11 +630,6 @@ func (s *BillingService) activateCheckoutSubscription(
 
 	_ = transactionID
 	return nil
-}
-
-func cardDetailsFromTransaction(tx nomba.WebhookTransaction) (last4, brand string) {
-	_ = tx
-	return "", ""
 }
 
 func (s *BillingService) handleRenewalWithoutPaymentMethod(
@@ -733,9 +734,12 @@ func (s *BillingService) CompleteCardCaptureFromWebhook(
 	tenantID, subscriptionID uuid.UUID,
 	tokenKey string,
 	tx nomba.WebhookTransaction,
+	order *nomba.WebhookOrder,
+	tokenized *nomba.WebhookTokenizedCardData,
+	webhookCustomer *nomba.WebhookCustomer,
 ) error {
 	if tokenKey == "" {
-		tokenKey = tx.TokenKey
+		tokenKey = nomba.EffectiveTokenKey(tx, tokenized)
 	}
 	if tokenKey == "" {
 		return fmt.Errorf("%w: missing tokenKey for card capture", domain.ErrValidation)
@@ -749,7 +753,7 @@ func (s *BillingService) CompleteCardCaptureFromWebhook(
 		return err
 	}
 
-	cardLast4, cardBrand := cardDetailsFromTransaction(tx)
+	cardLast4, cardBrand := nomba.CardDetailsFromWebhook(tx, order, tokenized, webhookCustomer)
 	setDefault := true
 	if s.pmResolver != nil {
 		setDefault = !s.pmResolver.CustomerHasDefaultCard(ctx, tenantID, sub.CustomerID)

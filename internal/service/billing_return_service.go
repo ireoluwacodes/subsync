@@ -9,6 +9,7 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
+	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type BillingReturnOutcome string
@@ -109,7 +110,7 @@ func (s *BillingReturnService) Resolve(ctx context.Context, orderReference, orde
 
 	if inv != nil {
 		view.InvoiceStatus = string(inv.Status)
-		view.AmountDisplay = formatMinorAmount(inv.AmountDue, inv.Currency)
+		view.AmountDisplay = utils.FormatMoneyDisplay(inv.AmountDue, inv.Currency)
 	}
 
 	nombaOK := false
@@ -199,18 +200,6 @@ func orderRefPurpose(orderRef string) string {
 		return "trial_verification"
 	}
 	return "checkout"
-}
-
-func formatMinorAmount(amount int64, currency string) string {
-	cur := strings.ToUpper(strings.TrimSpace(currency))
-	if cur == "" {
-		cur = "NGN"
-	}
-	major := float64(amount) / 100.0
-	if cur == "NGN" {
-		return fmt.Sprintf("₦%.2f", major)
-	}
-	return fmt.Sprintf("%s %.2f", cur, major)
 }
 
 func resolveCheckoutSuccessURL(raw string, cfg *config.Config) (string, error) {

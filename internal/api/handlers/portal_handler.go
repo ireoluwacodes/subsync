@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/api/dto"
 	"github.com/ireoluwacodes/subsync/internal/api/middleware"
+	"github.com/ireoluwacodes/subsync/internal/domain"
 	"github.com/ireoluwacodes/subsync/internal/portalpage"
 	"github.com/ireoluwacodes/subsync/internal/service"
 )
@@ -63,22 +64,26 @@ func (h *PortalHandler) Home(c *gin.Context) {
 		return
 	}
 	data := portalpage.HomeData{
-		Title:                 "Manage subscription",
-		Token:                 token,
-		TenantName:            view.TenantName,
-		PlanName:              view.PlanName,
-		CustomerEmail:         view.CustomerEmail,
-		State:                 string(view.Subscription.State),
-		CancelAtPeriodEnd:     view.CancelAtPeriodEnd,
-		AwaitingPaymentMethod: view.AwaitingPaymentMethod,
-		HasCard:               view.HasCard,
-		HasMandate:            view.HasMandate,
-		MandateStatus:         view.MandateStatus,
-		CanSetupDirectDebit:   view.CanSetupDirectDebit,
-		PaymentMethodLast4:    view.PaymentMethodLast4,
-		PaymentMethodBrand:    view.PaymentMethodBrand,
-		FlashMessage:          c.Query("msg"),
-		FlashError:            c.Query("err"),
+		Title:                   "Manage subscription",
+		Token:                   token,
+		TenantName:              view.TenantName,
+		PlanName:                view.PlanName,
+		CustomerEmail:           view.CustomerEmail,
+		State:                   string(view.Subscription.State),
+		CancelAtPeriodEnd:       view.CancelAtPeriodEnd,
+		CurrentPeriodStart:      view.CurrentPeriodStart,
+		CurrentPeriodEnd:        view.CurrentPeriodEnd,
+		CanManagePaymentMethods: view.CanManagePaymentMethods,
+		ShowCancelForm:          view.ShowCancelForm,
+		AwaitingPaymentMethod:   view.AwaitingPaymentMethod,
+		HasCard:                 view.HasCard,
+		HasMandate:              view.HasMandate,
+		MandateStatus:           view.MandateStatus,
+		CanSetupDirectDebit:     view.CanSetupDirectDebit,
+		PaymentMethodLast4:      view.PaymentMethodLast4,
+		PaymentMethodBrand:      view.PaymentMethodBrand,
+		FlashMessage:            c.Query("msg"),
+		FlashError:              c.Query("err"),
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
@@ -120,14 +125,21 @@ func (h *PortalHandler) DirectDebitForm(c *gin.Context) {
 			customerName = customer
 		}
 	}
+	banks, banksErr := h.svc.ListBanksForPortal(c.Request.Context(), token)
+	banksLoadError := ""
+	if banksErr != nil {
+		banksLoadError = "Could not load the bank list. Please try again in a moment."
+	}
 	data := portalpage.DirectDebitFormData{
-		Title:         "Set up direct debit",
-		Token:         token,
-		TenantName:    view.TenantName,
-		PlanName:      view.PlanName,
-		CustomerEmail: view.CustomerEmail,
-		CustomerName:  customerName,
-		FlashError:    c.Query("err"),
+		Title:          "Set up direct debit",
+		Token:          token,
+		TenantName:     view.TenantName,
+		PlanName:       view.PlanName,
+		CustomerEmail:  view.CustomerEmail,
+		CustomerName:   customerName,
+		Banks:          portalpage.BanksFromNomba(banks),
+		BanksLoadError: banksLoadError,
+		FlashError:     c.Query("err"),
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	_ = h.renderer.RenderDirectDebitForm(c.Writer, data)
@@ -194,23 +206,26 @@ func (h *PortalHandler) Cancel(c *gin.Context) {
 	var req service.PortalCancelInput
 	if wantsJSON(c) {
 		_ = c.ShouldBindJSON(&req)
-	} else {
-		req.CancelAtPeriodEnd = boolPtr(false)
 	}
-	sub, err := h.svc.Cancel(c.Request.Context(), c.Param("token"), req)
+	token := c.Param("token")
+	sub, err := h.svc.Cancel(c.Request.Context(), token, req)
 	if err != nil {
 		if wantsJSON(c) {
 			dto.RespondError(c, err)
 			return
 		}
-		c.Redirect(http.StatusSeeOther, "/portal/"+c.Param("token")+"?err=Could+not+cancel+subscription")
+		c.Redirect(http.StatusSeeOther, "/portal/"+token+"?err=Could+not+cancel+subscription")
 		return
 	}
 	if wantsJSON(c) {
 		dto.RespondOK(c, sub)
 		return
 	}
-	c.Redirect(http.StatusSeeOther, "/portal/"+c.Param("token")+"?msg=Subscription+canceled")
+	msg := "Your subscription will cancel at the end of your billing period"
+	if sub.State == domain.SubscriptionStateCanceled {
+		msg = "Subscription canceled"
+	}
+	c.Redirect(http.StatusSeeOther, "/portal/"+token+"?msg="+url.QueryEscape(msg))
 }
 
 func wantsJSON(c *gin.Context) bool {

@@ -12,7 +12,27 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/nomba"
 )
 
-const mandateEndYears = 5
+const (
+	mandateEndYears        = 5
+	mandateStartLeadMinutes = 2
+)
+
+var nigeriaLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Africa/Lagos")
+	if err != nil {
+		return time.FixedZone("WAT", 1*60*60)
+	}
+	return loc
+}()
+
+// mandateScheduleTimes formats start/end for Nomba direct debit in Nigeria local time (WAT).
+// Nomba validates startDate against local time; UTC timestamps can appear in the past.
+func mandateScheduleTimes(now time.Time) (start, end string) {
+	const layout = "2006-01-02T15:04"
+	startAt := now.In(nigeriaLoc).Add(mandateStartLeadMinutes * time.Minute)
+	endAt := startAt.AddDate(mandateEndYears, 0, 0)
+	return startAt.Format(layout), endAt.Format(layout)
+}
 
 type MandateService struct {
 	clock    clock.Clock
@@ -67,7 +87,7 @@ func (s *MandateService) CreateForSubscription(
 		return nil, err
 	}
 	now := s.clock.Now().UTC()
-	end := now.AddDate(mandateEndYears, 0, 0)
+	startDate, endDate := mandateScheduleTimes(now)
 	result, err := s.nomba.CreateMandate(ctx, tenant, nomba.CreateMandateRequest{
 		CustomerAccountNumber: in.CustomerAccountNumber,
 		BankCode:              in.BankCode,
@@ -79,8 +99,8 @@ func (s *MandateService) CreateForSubscription(
 		Narration:             fmt.Sprintf("SubSync subscription %s", plan.Name),
 		CustomerPhoneNumber:   in.CustomerPhone,
 		MerchantReference:     numericMerchantRef(sub.ID, now),
-		StartDate:             now.Format("2006-01-02T15:04"),
-		EndDate:               end.Format("2006-01-02T15:04"),
+		StartDate:             startDate,
+		EndDate:               endDate,
 		CustomerEmail:         in.CustomerEmail,
 		StartImmediately:      true,
 	})
