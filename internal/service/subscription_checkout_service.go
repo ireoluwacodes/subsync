@@ -232,7 +232,7 @@ func (s *SubscriptionCheckoutService) beginCheckout(
 	var amount float64
 
 	if plan.TrialDays > 0 {
-		orderRef = domain.CheckoutOrderRefPrefix + sub.ID.String()
+		orderRef = domain.CheckoutOrderRefPrefix + sub.ID.String() + "-" + uuid.New().String()
 		amount = checkoutTokenizationAmount
 	} else {
 		inv, err = s.invoices.CreateSubscriptionCheckoutInvoice(ctx, tenantID, sub, plan)

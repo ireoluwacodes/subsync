@@ -12,7 +12,11 @@ func parsePrefixedSubscriptionID(orderRef, prefix string) (uuid.UUID, bool) {
 	if !strings.HasPrefix(orderRef, prefix) {
 		return uuid.Nil, false
 	}
-	id, err := uuid.Parse(strings.TrimPrefix(orderRef, prefix))
+	rest := strings.TrimPrefix(orderRef, prefix)
+	if len(rest) < 36 {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(rest[:36])
 	if err != nil {
 		return uuid.Nil, false
 	}

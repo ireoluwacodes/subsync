@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -38,6 +37,7 @@ type BillingService struct {
 	publisher      TaskPublisher
 	webhooks       *WebhookService
 	portal         *PortalService
+	pmResolver     *PaymentMethodResolver
 }
 
 func NewBillingService(
@@ -53,7 +53,7 @@ func NewBillingService(
 	if clk == nil {
 		clk = clock.RealClock{}
 	}
-	return &BillingService{
+	svc := &BillingService{
 		cfg:       cfg,
 		clock:     clk,
 		repos:     repos,
@@ -63,6 +63,10 @@ func NewBillingService(
 		publisher: publisher,
 		webhooks:  webhooks,
 	}
+	if repos != nil {
+		svc.pmResolver = NewPaymentMethodResolver(repos.PaymentMethods)
+	}
+	return svc
 }
 
 func (s *BillingService) SetPaymentMethods(paymentMethods *PaymentMethodService) {
@@ -101,7 +105,7 @@ func (s *BillingService) ProcessPaymentMethodReminders(ctx context.Context, limi
 	}
 	sent := 0
 	for _, sub := range subs {
-		if sub.PaymentMethodID != nil {
+		if s.pmResolver != nil && s.pmResolver.HasChargeablePM(ctx, sub.TenantID, sub) {
 			continue
 		}
 		billingAt := sub.NextBillingAt
@@ -178,16 +182,19 @@ func (s *BillingService) ChargeDueSubscription(ctx context.Context, tenantID, su
 		return nil
 	}
 
-	pm, err := s.resolvePaymentMethod(ctx, tenantID, sub, customer.ID)
+	if s.pmResolver == nil {
+		return fmt.Errorf("%w: payment method resolver not configured", domain.ErrValidation)
+	}
+	pm, err := s.pmResolver.ResolvePrimaryPM(ctx, tenantID, sub)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
+		pm, err = s.pmResolver.ResolveMandatePM(ctx, tenantID, sub)
+		if err != nil {
 			tenant, tErr := s.repos.Tenants.GetByID(ctx, tenantID)
 			if tErr != nil {
 				return tErr
 			}
 			return s.handleRenewalWithoutPaymentMethod(ctx, tenant, customer, sub, plan, inv)
 		}
-		return err
 	}
 
 	tenant, err := s.repos.Tenants.GetByID(ctx, tenantID)
@@ -218,13 +225,6 @@ func (s *BillingService) CompleteSuccessfulCharge(ctx context.Context, tenant *d
 	return s.handleChargeSuccess(ctx, tenant, customer, sub, plan, inv)
 }
 
-func (s *BillingService) resolvePaymentMethod(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, customerID uuid.UUID) (*domain.PaymentMethod, error) {
-	if sub.PaymentMethodID != nil {
-		return s.repos.PaymentMethods.GetByID(ctx, tenantID, *sub.PaymentMethodID)
-	}
-	return s.repos.PaymentMethods.GetDefaultForCustomer(ctx, tenantID, customerID)
-}
-
 func (s *BillingService) handleChargeSuccess(ctx context.Context, tenant *domain.Tenant, customer *domain.Customer, sub *domain.Subscription, plan *domain.Plan, inv *domain.Invoice) error {
 	from := sub.State
 	if sub.State == domain.SubscriptionStatePastDue {
@@ -248,7 +248,7 @@ func (s *BillingService) handleChargeSuccess(ctx context.Context, tenant *domain
 		})
 	}
 
-	subject, html := email.SubscriptionConfirmedHTML(tenant.Name, inv.AmountPaid, inv.Currency)
+	subject, html := email.SubscriptionConfirmedHTML(tenant.Name, inv.AmountPaid, inv.Currency, "")
 	_ = s.mailer.Send(ctx, customer.Email, subject, html)
 
 	s.enqueueInvoicePDF(ctx, tenant.ID, inv.ID)
@@ -430,6 +430,7 @@ func (s *BillingService) CompleteCheckoutFromWebhook(
 	inv *domain.Invoice,
 	tokenKey, transactionID string,
 	tx nomba.WebhookTransaction,
+	order *nomba.WebhookOrder,
 ) error {
 	if inv == nil {
 		return fmt.Errorf("%w: checkout invoice required", domain.ErrValidation)
@@ -465,7 +466,7 @@ func (s *BillingService) CompleteCheckoutFromWebhook(
 		return err
 	}
 
-	if err := s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, inv, &tokenKey, transactionID, tx); err != nil {
+	if err := s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, inv, &tokenKey, transactionID, tx, order); err != nil {
 		return err
 	}
 
@@ -486,6 +487,7 @@ func (s *BillingService) CompleteTrialCheckoutFromWebhook(
 	tenantID, subscriptionID uuid.UUID,
 	tokenKey, transactionID string,
 	tx nomba.WebhookTransaction,
+	order *nomba.WebhookOrder,
 ) error {
 	sub, err := s.repos.Subscriptions.GetByID(ctx, tenantID, subscriptionID)
 	if err != nil {
@@ -510,7 +512,7 @@ func (s *BillingService) CompleteTrialCheckoutFromWebhook(
 		return err
 	}
 
-	return s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, nil, &tokenKey, transactionID, tx)
+	return s.activateCheckoutSubscription(ctx, tenant, customer, sub, plan, nil, &tokenKey, transactionID, tx, order)
 }
 
 func (s *BillingService) activateCheckoutSubscription(
@@ -523,16 +525,20 @@ func (s *BillingService) activateCheckoutSubscription(
 	tokenKey *string,
 	transactionID string,
 	tx nomba.WebhookTransaction,
+	order *nomba.WebhookOrder,
 ) error {
 	key := ""
 	if tokenKey != nil {
 		key = *tokenKey
 	}
+	if nomba.IsPlaceholderToken(key) {
+		key = ""
+	}
 	if key == "" {
-		key = tx.TokenKey
+		key = nomba.EffectiveTokenKey(tx, nil)
 	}
 
-	transferPaid := key == "" && nomba.IsTransferTransaction(tx)
+	transferPaid := key == "" && nomba.IsTransferPayment(tx, order)
 	if key == "" && !transferPaid {
 		return fmt.Errorf("%w: missing tokenKey for card checkout", domain.ErrValidation)
 	}
@@ -546,13 +552,17 @@ func (s *BillingService) activateCheckoutSubscription(
 			return fmt.Errorf("%w: payment method service not configured", domain.ErrValidation)
 		}
 		cardLast4, cardBrand := cardDetailsFromTransaction(tx)
+		setDefault := true
+		if s.pmResolver != nil {
+			setDefault = !s.pmResolver.CustomerHasDefaultCard(ctx, sub.TenantID, sub.CustomerID)
+		}
 		pm, err := s.paymentMethods.Create(ctx, sub.TenantID, CreatePaymentMethodInput{
 			CustomerID: sub.CustomerID,
 			Type:       domain.PaymentMethodTokenizedCard,
 			TokenKey:   key,
 			CardLast4:  cardLast4,
 			CardBrand:  cardBrand,
-			IsDefault:  true,
+			IsDefault:  setDefault,
 		})
 		if err != nil {
 			return err
@@ -602,9 +612,10 @@ func (s *BillingService) activateCheckoutSubscription(
 	}
 
 	if inv != nil && inv.Status == domain.InvoiceStatusPaid {
-		subject, html := email.SubscriptionConfirmedHTML(tenant.Name, inv.AmountPaid, inv.Currency)
-		_ = s.mailer.Send(ctx, customer.Email, subject, html)
+		s.sendSubscriptionConfirmedEmail(ctx, tenant, customer, sub, inv)
 		s.enqueueInvoicePDF(ctx, tenant.ID, inv.ID)
+	} else if !transferPaid {
+		s.sendSubscriptionConfirmedEmail(ctx, tenant, customer, sub, nil)
 	}
 
 	if transferPaid {
@@ -628,6 +639,11 @@ func (s *BillingService) handleRenewalWithoutPaymentMethod(
 	plan *domain.Plan,
 	inv *domain.Invoice,
 ) error {
+	if s.pmResolver != nil && s.pmResolver.HasPendingMandate(ctx, tenant.ID, sub) {
+		s.sendPaymentMethodCaptureReminder(ctx, tenant, customer, sub, plan, 0)
+		return nil
+	}
+
 	if inv != nil && inv.Status == domain.InvoiceStatusOpen {
 		if _, err := s.invoices.Void(ctx, tenant.ID, inv.ID); err != nil {
 			return err
@@ -644,6 +660,30 @@ func (s *BillingService) handleRenewalWithoutPaymentMethod(
 	_ = customer
 	_ = plan
 	return nil
+}
+
+func (s *BillingService) sendSubscriptionConfirmedEmail(
+	ctx context.Context,
+	tenant *domain.Tenant,
+	customer *domain.Customer,
+	sub *domain.Subscription,
+	inv *domain.Invoice,
+) {
+	if s.mailer == nil {
+		return
+	}
+	portalURL := ""
+	if s.portal != nil {
+		portalURL, _ = s.portal.CreatePaymentMethodCaptureLink(ctx, tenant.ID, sub.ID)
+	}
+	var amount int64
+	currency := "NGN"
+	if inv != nil {
+		amount = inv.AmountPaid
+		currency = inv.Currency
+	}
+	subject, htmlBody := email.SubscriptionConfirmedHTML(tenant.Name, amount, currency, portalURL)
+	_ = s.mailer.Send(ctx, customer.Email, subject, htmlBody)
 }
 
 func (s *BillingService) sendPaymentMethodCaptureRequiredEmail(
@@ -710,13 +750,17 @@ func (s *BillingService) CompleteCardCaptureFromWebhook(
 	}
 
 	cardLast4, cardBrand := cardDetailsFromTransaction(tx)
+	setDefault := true
+	if s.pmResolver != nil {
+		setDefault = !s.pmResolver.CustomerHasDefaultCard(ctx, tenantID, sub.CustomerID)
+	}
 	pm, err := s.paymentMethods.Create(ctx, tenantID, CreatePaymentMethodInput{
 		CustomerID: sub.CustomerID,
 		Type:       domain.PaymentMethodTokenizedCard,
 		TokenKey:   tokenKey,
 		CardLast4:  cardLast4,
 		CardBrand:  cardBrand,
-		IsDefault:  true,
+		IsDefault:  setDefault,
 	})
 	if err != nil {
 		return err

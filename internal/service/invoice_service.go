@@ -201,6 +201,17 @@ func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenan
 	if tenant == nil || pm == nil || s.nomba == nil {
 		return nil, fmt.Errorf("%w: tenant and payment method required for live charge", domain.ErrValidation)
 	}
+
+	switch pm.Type {
+	case domain.PaymentMethodDirectDebit:
+		return s.chargeWithMandate(ctx, tenant, pm, inv)
+	default:
+		return s.chargeWithCard(ctx, tenant, pm, inv, customerEmail)
+	}
+}
+
+func (s *InvoiceService) chargeWithCard(ctx context.Context, tenant *domain.Tenant, pm *domain.PaymentMethod, inv *domain.Invoice, customerEmail string) (*domain.Invoice, error) {
+	now := s.clock.Now().UTC()
 	if pm.TokenKey == "" {
 		return nil, fmt.Errorf("%w: payment method missing token", domain.ErrValidation)
 	}
@@ -234,6 +245,38 @@ func (s *InvoiceService) chargeInvoice(ctx context.Context, tenant *domain.Tenan
 
 	inv.Status = domain.InvoiceStatusProcessing
 	inv.NombaTransactionID = result.Message
+	if err := s.repo.Update(ctx, inv); err != nil {
+		return nil, err
+	}
+	return inv, nil
+}
+
+func (s *InvoiceService) chargeWithMandate(ctx context.Context, tenant *domain.Tenant, pm *domain.PaymentMethod, inv *domain.Invoice) (*domain.Invoice, error) {
+	now := s.clock.Now().UTC()
+	if pm.MandateID == "" {
+		return nil, fmt.Errorf("%w: payment method missing mandate", domain.ErrValidation)
+	}
+	if !pm.MandateReady() {
+		status, err := s.nomba.GetMandateStatus(ctx, tenant, pm.MandateID)
+		if err != nil {
+			return nil, err
+		}
+		if !status.MandateReadyForDebit() {
+			return nil, fmt.Errorf("%w: mandate not ready", domain.ErrValidation)
+		}
+	}
+	amount := fmt.Sprintf("%.2f", float64(inv.AmountDue)/100.0)
+	_, err := s.nomba.DebitMandate(ctx, tenant, nomba.DebitMandateRequest{
+		MandateID:         pm.MandateID,
+		Amount:            amount,
+		MerchantReference: inv.NombaOrderRef,
+	})
+	if err != nil {
+		inv.NextAttemptAt = utils.PtrTime(now.Add(24 * time.Hour))
+		_ = s.repo.Update(ctx, inv)
+		return inv, err
+	}
+	inv.Status = domain.InvoiceStatusProcessing
 	if err := s.repo.Update(ctx, inv); err != nil {
 		return nil, err
 	}

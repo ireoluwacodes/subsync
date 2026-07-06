@@ -16,6 +16,6 @@ func TestNewBillingService(t *testing.T) {
 }
 
 func TestNewDunningService(t *testing.T) {
-	svc := NewDunningService(nil, nil, nil, &SubscriptionService{}, nil, nil, email.NewMailerService(nil), nil, nil)
+	svc := NewDunningService(nil, nil, nil, &SubscriptionService{}, nil, nil, email.NewMailerService(nil), nil, nil, nil)
 	require.NotNil(t, svc)
 }

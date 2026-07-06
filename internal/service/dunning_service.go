@@ -18,15 +18,16 @@ import (
 )
 
 type DunningService struct {
-	clock     clock.Clock
-	repos     *db.Repos
-	invoices  *InvoiceService
-	subs      *SubscriptionService
-	billing   *BillingService
-	nomba     *nomba.Client
-	mailer    *email.MailerService
-	publisher TaskPublisher
-	cfg       *config.Config
+	clock      clock.Clock
+	repos      *db.Repos
+	invoices   *InvoiceService
+	subs       *SubscriptionService
+	billing    *BillingService
+	nomba      *nomba.Client
+	mailer     *email.MailerService
+	publisher  TaskPublisher
+	cfg        *config.Config
+	pmResolver *PaymentMethodResolver
 }
 
 func NewDunningService(
@@ -39,11 +40,12 @@ func NewDunningService(
 	mailer *email.MailerService,
 	publisher TaskPublisher,
 	cfg *config.Config,
+	_ *MandateService,
 ) *DunningService {
 	if clk == nil {
 		clk = clock.RealClock{}
 	}
-	return &DunningService{
+	svc := &DunningService{
 		clock:     clk,
 		repos:     repos,
 		invoices:  invoices,
@@ -54,6 +56,10 @@ func NewDunningService(
 		publisher: publisher,
 		cfg:       cfg,
 	}
+	if repos != nil {
+		svc.pmResolver = NewPaymentMethodResolver(repos.PaymentMethods)
+	}
+	return svc
 }
 
 func (s *DunningService) ProcessStep(ctx context.Context, tenantID, subscriptionID uuid.UUID) error {
@@ -125,7 +131,7 @@ func (s *DunningService) retryCharge(ctx context.Context, tenant *domain.Tenant,
 	if err != nil {
 		return err
 	}
-	pm, err := s.resolvePaymentMethod(ctx, tenant.ID, sub, customer.ID)
+	pm, err := s.pmResolver.ResolvePrimaryPM(ctx, tenant.ID, sub)
 	if err != nil {
 		return err
 	}
@@ -144,57 +150,34 @@ func (s *DunningService) retryCharge(ctx context.Context, tenant *domain.Tenant,
 }
 
 func (s *DunningService) mandateFallback(ctx context.Context, tenant *domain.Tenant, sub *domain.Subscription) error {
-	pm, err := s.resolvePaymentMethod(ctx, tenant.ID, sub, sub.CustomerID)
+	pm, err := s.pmResolver.ResolveMandatePM(ctx, tenant.ID, sub)
 	if err != nil {
-		return err
-	}
-	if pm.Type != domain.PaymentMethodDirectDebit || pm.MandateID == "" {
 		return fmt.Errorf("%w: no direct debit mandate", domain.ErrValidation)
+	}
+	if !pm.MandateReady() {
+		return fmt.Errorf("%w: mandate not ready", domain.ErrValidation)
 	}
 	inv, err := s.repos.Invoices.LatestOpenForSubscription(ctx, tenant.ID, sub.ID)
 	if err != nil {
 		return err
 	}
-
-	useMock := s.cfg == nil || s.cfg.BillingMockResult != ""
-	if useMock {
-		now := s.clock.Now().UTC()
-		inv.Status = domain.InvoiceStatusPaid
-		inv.AmountPaid = inv.AmountDue
-		inv.PaidAt = &now
-		if err := s.repos.Invoices.Update(ctx, inv); err != nil {
-			return err
-		}
-		customer, err := s.repos.Customers.GetByID(ctx, tenant.ID, sub.CustomerID)
-		if err != nil {
-			return err
-		}
-		plan, err := s.repos.Plans.GetByID(ctx, tenant.ID, sub.PlanID)
-		if err != nil {
-			return err
-		}
-		return s.billing.CompleteSuccessfulCharge(ctx, tenant, customer, sub, plan, inv)
-	}
-
-	status, err := s.nomba.GetMandateStatus(ctx, tenant, pm.MandateID)
+	customer, err := s.repos.Customers.GetByID(ctx, tenant.ID, sub.CustomerID)
 	if err != nil {
 		return err
 	}
-	if !status.MandateReadyForDebit() {
-		return fmt.Errorf("%w: mandate not ready", domain.ErrValidation)
+
+	charged, chargeErr := s.invoices.ChargeWithPayment(ctx, tenant, pm, inv, customer.Email)
+	if chargeErr != nil {
+		return chargeErr
 	}
-	amount := fmt.Sprintf("%.2f", float64(inv.AmountDue)/100.0)
-	_, err = s.nomba.DebitMandate(ctx, tenant, nomba.DebitMandateRequest{
-		MandateID:         pm.MandateID,
-		Amount:            amount,
-		MerchantReference: inv.NombaOrderRef,
-	})
+	if charged.Status == domain.InvoiceStatusProcessing {
+		return nil
+	}
+	plan, err := s.repos.Plans.GetByID(ctx, tenant.ID, sub.PlanID)
 	if err != nil {
 		return err
 	}
-	inv.Status = domain.InvoiceStatusProcessing
-	inv.AttemptCount++
-	return s.repos.Invoices.Update(ctx, inv)
+	return s.billing.CompleteSuccessfulCharge(ctx, tenant, customer, sub, plan, charged)
 }
 
 func (s *DunningService) cancelSubscription(ctx context.Context, tenant *domain.Tenant, customer *domain.Customer, sub *domain.Subscription) error {
@@ -207,12 +190,6 @@ func (s *DunningService) cancelSubscription(ctx context.Context, tenant *domain.
 	return nil
 }
 
-func (s *DunningService) resolvePaymentMethod(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, customerID uuid.UUID) (*domain.PaymentMethod, error) {
-	if sub.PaymentMethodID != nil {
-		return s.repos.PaymentMethods.GetByID(ctx, tenantID, *sub.PaymentMethodID)
-	}
-	return s.repos.PaymentMethods.GetDefaultForCustomer(ctx, tenantID, customerID)
-}
 
 func (s *DunningService) enqueueDunning(ctx context.Context, tenantID, subscriptionID uuid.UUID, delay time.Duration) {
 	if s.publisher == nil {
