@@ -1,0 +1,101 @@
+# Card Capture
+
+When a customer pays their first subscription period via **bank transfer**, SubSync activates the subscription but does not have a saved card. Renewals require a tokenized card before `next_billing_at`.
+
+## Why this exists
+
+Transfer checkout (`allow_bank_transfer: true`) collects the first payment without a `tokenKey`. The subscription is `active` with `payment_method_id: null` and `metadata.awaiting_payment_method: true`.
+
+Without a card:
+
+- SubSync sends reminder emails at **7, 3, and 1 day(s)** before renewal
+- On the billing date, the subscription is **canceled** (not charged, not `past_due`)
+
+Customers must add a card before renewal.
+
+## Capture endpoint
+
+```
+POST {[base_url]}/api/v1/subscriptions/:id/capture-payment-method
+Authorization: Bearer ssk_...
+```
+
+```json
+{
+  "success_url": "https://app.acme.com/billing/card-added",
+  "cancel_url": "https://app.acme.com/billing",
+  "send_email": false
+}
+```
+
+**Response `200`:**
+
+```json
+{
+  "checkout_url": "https://checkout.nomba.com/...",
+  "order_reference": "capture-<subscription-id>"
+}
+```
+
+This is a **card-only** Nomba checkout (₦100 verification). Redirect the customer to `checkout_url`.
+
+## Webhook completion
+
+When Nomba sends `payment_success` for order ref `capture-{subscription_id}`:
+
+1. SubSync saves the payment method from `tokenKey`
+2. Clears `awaiting_payment_method`
+3. Sets `payment_method_id` on the subscription
+4. If billing was waiting, attempts renewal immediately
+
+## When to show "Add card" in your UI
+
+Check the subscription:
+
+```
+GET {[base_url]}/api/v1/subscriptions/:id
+```
+
+Show the prompt when:
+
+- `payment_method_id` is `null`, and
+- `state` is `active` or `trialing`, and
+- `metadata.awaiting_payment_method` is `true` (transfer path)
+
+Or proactively for any active subscription without a payment method approaching `next_billing_at`.
+
+## Alternative: customer portal
+
+Issue a portal link instead of calling capture directly:
+
+```
+POST {[base_url]}/api/v1/portal/token
+{ "subscription_id": "<uuid>", "expires_in_hours": 72 }
+```
+
+The portal lets customers update their payment method via Nomba checkout. See [Customer portal](/guides/customer-portal).
+
+## Email reminders
+
+SubSync sends:
+
+1. **Immediately** after transfer activation — "save a card for renewals"
+2. **7, 3, 1 days** before `next_billing_at` — urgency reminders with portal/capture link
+
+Reminder emails include links to your customer's portal or card-capture flow.
+
+## Integrator flow
+
+```
+Transfer checkout completes → subscription active, no card
+→ Your app shows "Add payment method"
+→ POST {[base_url]}/api/v1/subscriptions/:id/capture-payment-method
+→ Redirect to checkout_url
+→ Webhook saves card → renewals work
+```
+
+## Related
+
+- [Subscription checkout](/guides/subscription-checkout)
+- [Customer portal](/guides/customer-portal)
+- [Troubleshooting](/guides/troubleshooting)

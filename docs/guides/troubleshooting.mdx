@@ -1,0 +1,91 @@
+# Troubleshooting
+
+Common integration issues and how to fix them.
+
+## Subscription stuck on `incomplete`
+
+**Symptoms:** Checkout completed on Nomba but SubSync still shows `incomplete`.
+
+**Checks:**
+
+1. Is the inbound Nomba webhook URL correct? Copy it from **Settings → Nomba** in the dashboard (format: `{[base_url]}/webhooks/nomba/{tenant_id}`).
+2. Is the webhook signing secret saved in SubSync **Settings → Nomba**?
+3. Did Nomba show a successful delivery for the payment event? Check Nomba's webhook logs.
+4. Resume checkout: `POST {[base_url]}/api/v1/subscriptions/:id/checkout`
+
+If the above look correct, contact SubSync support with the subscription ID and payment timestamp.
+
+## Renewals not running
+
+**Symptoms:** `next_billing_at` passed but no invoice or charge.
+
+**Checks:**
+
+1. Does the subscription have a saved card (`payment_method_id` set)?
+2. For transfer signups — was card captured before billing date? Without a card, the subscription is **canceled** on the billing date instead of renewing.
+3. Is the subscription still `active` or `trialing` (not `canceled` / `paused`)?
+
+If credentials and payment method look correct but nothing charged, contact support with `subscription_id` and `next_billing_at`.
+
+## Transfer signup canceled at renewal
+
+**Expected behavior** if no card was saved by `next_billing_at`.
+
+**Fix:** Call `POST {[base_url]}/api/v1/subscriptions/:id/capture-payment-method` or send a portal link before the billing date. Reminder emails go out 7, 3, and 1 days before.
+
+## `401 unauthorized` on API calls
+
+- API key must include the `ssk_` prefix in the `Authorization: Bearer` header
+- JWT may be expired — refresh via `GET {[base_url]}/api/v1/auth/refresh` (dashboard session only)
+- Confirm you are calling `{[base_url]}/api/v1/...`
+
+## `409 conflict` on checkout
+
+Customer already has an `incomplete` subscription for that plan. Use:
+
+```
+POST {[base_url]}/api/v1/subscriptions/:id/checkout
+```
+
+## Invoice stuck on `processing`
+
+Nomba sometimes returns async charge status. SubSync reconciles with Nomba automatically (typically within ~15 minutes). If it stays `processing` for longer, verify Nomba sandbox/production credentials in **Settings → Nomba**.
+
+## Outbound webhooks not received
+
+1. Endpoint URL must be **HTTPS** in production
+2. Your server must return **2xx** within the timeout
+3. Check `GET {[base_url]}/api/v1/webhook-endpoints/:id/deliveries` for failure reasons
+4. For local dev, expose your app with ngrok (or similar) and register that HTTPS URL — SubSync calls **your** server, not the other way around
+
+## Checkout emails not sending
+
+- Enable **send checkout email** on checkout (`send_checkout_email: true`) or use the dashboard
+- If emails still fail, copy `checkout_url` from the API response and share it manually while debugging
+
+## Nomba `422 invalid_nomba_credentials`
+
+Credentials failed token issue. Re-check client ID, secret, account ID, and environment (sandbox vs production) in **Settings → Nomba**.
+
+## Local development tips
+
+- Use Nomba **sandbox** credentials in the dashboard
+- Point `success_url` / `cancel_url` at `http://localhost:...` while testing your UI
+- Use ngrok (or similar) for your **outbound webhook** URL if you want real-time unlock during local dev
+
+## Still stuck?
+
+Gather:
+
+- `subscription_id`, `tenant_id`
+- Invoice ID and status
+- Timestamp of Nomba payment
+- Nomba webhook delivery status (from Nomba dashboard)
+
+Contact SubSync support with the above.
+
+## Related
+
+- [Nomba integration](/guides/nomba)
+- [Quick Start](/quickstart)
+- [Card capture](/guides/card-capture)

@@ -1,0 +1,69 @@
+# Security
+
+How SubSync protects merchant credentials, payment data, and webhook integrity.
+
+## Per-merchant Nomba isolation
+
+Each tenant stores their own Nomba OAuth credentials. SubSync:
+
+- Encrypts `nomba_client_secret` at rest (AES-256-GCM)
+- Encrypts Nomba webhook signing keys at rest
+- Calls Nomba with **that tenant's** token and `accountId`
+- Never pools money across merchants
+
+There is no shared Nomba parent account in SubSync.
+
+## API authentication
+
+| Token | Storage recommendation |
+|-------|-------------------------|
+| API key (`ssk_`) | Secrets manager, env var — never client-side |
+| JWT access token | Memory or short-lived storage in dashboard |
+| Refresh token | httpOnly cookie only |
+
+Rotate API keys via `POST {[base_url]}/api/v1/settings/api-key/rotate` if compromised.
+
+## Inbound Nomba webhooks
+
+Nomba signs payloads with `nomba-signature` and `nomba-timestamp`. SubSync verifies using the merchant's webhook secret stored in settings.
+
+- Register tenant-specific URL: `{[base_url]}/webhooks/nomba/{tenant_id}`
+- Never use a shared webhook endpoint across tenants
+- Reject replayed or unsigned payloads
+
+## Outbound SubSync webhooks
+
+Deliveries to your app include `SubSync-Signature`. Verify on your server before changing subscription state in your database.
+
+<Callout icon="🔐" theme="warning">
+  Treat webhook endpoints like admin APIs. Unverified handlers let anyone forge "payment succeeded" events.
+</Callout>
+
+## PCI and card data
+
+SubSync does not require you to collect card numbers. Checkout and portal flows redirect to **Nomba hosted pages**. You receive tokens (`token_key`) via webhook, not PAN data.
+
+Do not log full webhook bodies in production — they may contain sensitive fields.
+
+## Production checklist
+
+| Check | Requirement |
+|-------|-------------|
+| Nomba credentials | Valid sandbox or production values in **Settings → Nomba** |
+| Inbound Nomba webhook | Registered in Nomba dashboard using URL from SubSync settings |
+| Your redirect URLs | HTTPS in production (`success_url`, `cancel_url`) |
+| Outbound webhook URL | HTTPS; verify `SubSync-Signature` on every delivery |
+
+## Environment secrets
+
+Never commit API keys or Nomba client secrets in your app's source repo. Use environment variables or a secrets manager on **your** infrastructure.
+
+## Outbound webhook HTTPS
+
+Production webhook URLs must use HTTPS. SubSync signs every delivery — verify signatures on your server before trusting payload data.
+
+## Related
+
+- [Authentication](/guides/authentication)
+- [Nomba integration](/guides/nomba)
+- [Outbound webhooks](/guides/webhooks)

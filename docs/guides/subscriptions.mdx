@@ -1,0 +1,125 @@
+# Subscriptions
+
+Subscriptions connect a customer to a plan and drive billing cycles, renewals, and lifecycle state.
+
+## States
+
+| State | Meaning | Typical action |
+|-------|---------|----------------|
+| `incomplete` | Awaiting first checkout payment | Resend checkout link |
+| `trialing` | Trial active, card on file | Show trial end date |
+| `active` | Paid and renewing | Normal access |
+| `past_due` | Payment failed, in dunning | Prompt card update / retry invoice |
+| `paused` | Billing paused | Show resume date |
+| `canceled` | Ended | Read-only |
+| `expired` | Trial ended without conversion | Read-only |
+
+## Recommended: checkout signup
+
+```
+POST {[base_url]}/api/v1/subscriptions/checkout
+```
+
+See [Subscription checkout](/guides/subscription-checkout).
+
+## Direct create (card already tokenized)
+
+When you already have a Nomba `token_key`:
+
+```
+POST {[base_url]}/api/v1/payment-methods
+POST {[base_url]}/api/v1/subscriptions
+```
+
+```json
+{
+  "customer_id": "<uuid>",
+  "plan_id": "<uuid>",
+  "payment_method_id": "<uuid>"
+}
+```
+
+- Non-trial plan + payment method → **immediate charge**
+- Trial plan → enters `trialing` without full plan charge until trial ends
+
+Skip this path for customer-facing signup — use checkout instead.
+
+## List and filter
+
+```
+GET {[base_url]}/api/v1/subscriptions?state=active&customer_id=<uuid>&page=1&per_page=20
+```
+
+## Cancel
+
+```
+POST {[base_url]}/api/v1/subscriptions/:id/cancel
+```
+
+```json
+{
+  "cancel_at_period_end": true,
+  "reason": "customer requested"
+}
+```
+
+- `cancel_at_period_end: true` — access until period end, then canceled
+- `cancel_at_period_end: false` — cancel immediately
+
+Transfer signups without a card are **canceled automatically** on the billing date if no payment method was saved (reason: `no_payment_method_at_renewal`).
+
+## Pause and resume
+
+```
+POST {[base_url]}/api/v1/subscriptions/:id/pause
+{ "pause_ends_at": "2026-08-01T00:00:00Z" }
+
+POST {[base_url]}/api/v1/subscriptions/:id/resume
+```
+
+Billing stops while paused. `next_billing_at` adjusts on resume.
+
+## Upgrade
+
+Preview proration:
+
+```
+GET {[base_url]}/api/v1/subscriptions/:id/upgrade/preview?new_plan_id=<uuid>
+```
+
+Apply upgrade:
+
+```
+POST {[base_url]}/api/v1/subscriptions/:id/upgrade
+{ "new_plan_id": "<uuid>" }
+```
+
+Creates a proration invoice when applicable.
+
+## State history
+
+```
+GET {[base_url]}/api/v1/subscriptions/:id/transitions
+```
+
+Audit log of state changes with reason and actor.
+
+## Key fields on subscription object
+
+| Field | Description |
+|-------|-------------|
+| `current_period_start` / `current_period_end` | Active billing window |
+| `next_billing_at` | When renewal is attempted |
+| `trial_ends_at` | Trial expiry (if trialing) |
+| `payment_method_id` | Saved card for renewals |
+| `metadata.awaiting_payment_method` | Transfer signup needs card capture |
+
+## Renewal (background)
+
+SubSync charges at `next_billing_at`. No API call needed for normal renewals. Failures move subscription to `past_due` and trigger dunning.
+
+## Related
+
+- [Subscription checkout](/guides/subscription-checkout)
+- [Card capture](/guides/card-capture)
+- [Invoices & dunning](/guides/invoices)

@@ -1,0 +1,98 @@
+<Callout icon="💳" theme="info">
+  SubSync is a subscription billing API for Nomba-powered merchants. You bring your own Nomba credentials; SubSync orchestrates plans, customers, checkout, renewals, and webhooks on your behalf. Integrate server-to-server with an API key (`ssk_...`).
+</Callout>
+
+<Cards>
+  <Card title="Quick Start" href="/quickstart" icon="fa-duotone fa-rocket-launch">
+    Sign up in the dashboard, connect Nomba, then run your first subscription checkout via API key
+  </Card>
+
+  <Card title="API Reference" href="/api-reference" icon="fa-duotone fa-code-simple">
+    Integrator endpoints, request shapes, and the OpenAPI spec at `{[base_url]}/openapi.json`
+  </Card>
+
+  <Card title="Build with AI" href="/build-with-ai" icon="fa-duotone fa-sparkles">
+    Point your LLM at OpenAPI or Postman — card-only checkout, webhooks, and renewal flows included
+  </Card>
+</Cards>
+
+<br />
+
+## Recent Releases
+
+<Cards>
+  <Card isNew kind="tile" title="Subscription Checkout" href="/guides/subscription-checkout" icon="fa-duotone fa-cart-shopping">
+    Hosted Nomba checkout — card-only by default, optional bank transfer, trial support
+  </Card>
+
+  <Card isNew kind="tile" title="Card Capture" href="/guides/card-capture" icon="fa-duotone fa-credit-card">
+    Transfer signups can save a card before renewal via capture-payment-method or portal
+  </Card>
+
+  <Card kind="tile" title="Outbound Webhooks" href="/guides/webhooks" icon="fa-duotone fa-bullhorn">
+    `subscription.updated`, `invoice.paid`, and more — signed deliveries to your endpoints
+  </Card>
+</Cards>
+
+<br />
+
+## The Basics
+
+<Cards>
+  <Card kind="tile" title="Authentication" href="/guides/authentication" icon="fa-duotone fa-key">
+    API keys for integrators (`ssk_...`) and JWT for the merchant dashboard
+  </Card>
+
+  <Card kind="tile" title="Plans & Customers" href="/guides/plans-and-customers" icon="fa-duotone fa-users">
+    Create billing plans and map them to customers on your platform
+  </Card>
+
+  <Card kind="tile" title="Subscriptions" href="/guides/subscriptions" icon="fa-duotone fa-arrows-rotate">
+    Checkout, direct create, pause, cancel, upgrade, and lifecycle states
+  </Card>
+
+  <Card kind="tile" title="Nomba Integration" href="/guides/nomba" icon="fa-duotone fa-plug">
+    Per-merchant credentials, inbound webhooks, and sandbox live-billing checklist
+  </Card>
+
+  <Card kind="tile" title="Customer Portal" href="/guides/customer-portal" icon="fa-duotone fa-door-open">
+    Issue portal tokens so customers can cancel or update their payment method
+  </Card>
+
+  <Card kind="tile" title="Invoices & Dunning" href="/guides/invoices" icon="fa-duotone fa-file-invoice-dollar">
+    Invoice lifecycle, PDFs, retry charges, and automated dunning steps
+  </Card>
+
+  <Card kind="tile" title="Analytics" href="/guides/analytics" icon="fa-duotone fa-chart-line">
+    MRR, churn, dunning recovery, and revenue — dashboard metrics API
+  </Card>
+
+  <Card kind="tile" title="Security" href="/guides/security" icon="fa-duotone fa-shield-dog">
+    Encrypted Nomba secrets, webhook signature verification, and HTTPS requirements
+  </Card>
+
+  <Card kind="tile" title="Common Issues" href="/guides/troubleshooting" icon="fa-duotone fa-file-circle-info">
+    Webhook mismatches, incomplete checkouts, transfer renewals, and missing outbound events
+  </Card>
+
+  <Card kind="tile" title="Conventions" href="/guides/conventions" icon="fa-duotone fa-brackets-curly">
+    Envelope shape, error codes, money in kobo, and pagination
+  </Card>
+</Cards>
+
+<br />
+
+## Base URLs
+
+| | URL |
+|---|-----|
+| API | `{[base_url]}/api/v1` |
+| OpenAPI | `{[base_url]}/openapi.json` |
+
+Nomba inbound webhooks (configure in Nomba dashboard):
+
+```
+{[base_url]}/webhooks/nomba/{tenant_id}
+```
+
+Your tenant-specific URL is shown in **Settings → Nomba** in the dashboard.

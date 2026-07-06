@@ -205,15 +205,9 @@ func (r *AnalyticsRepo) Revenue(ctx context.Context, tenantID uuid.UUID, from, t
 		Amount int64
 	}
 	var daily []dailyRow
-	dailyQ := r.db.WithContext(ctx).Raw(`
-		SELECT TO_CHAR(paid_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
-			COALESCE(SUM(amount_paid), 0)::bigint AS amount
-		FROM invoices
-		WHERE tenant_id = ? AND status = 'paid'
-			AND paid_at >= ? AND paid_at < ?
-	`, tenantID, from, to)
+	var dailyErr error
 	if currency != "" {
-		dailyQ = r.db.WithContext(ctx).Raw(`
+		dailyErr = r.db.WithContext(ctx).Raw(`
 			SELECT TO_CHAR(paid_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
 				COALESCE(SUM(amount_paid), 0)::bigint AS amount
 			FROM invoices
@@ -222,9 +216,9 @@ func (r *AnalyticsRepo) Revenue(ctx context.Context, tenantID uuid.UUID, from, t
 				AND currency = ?
 			GROUP BY 1
 			ORDER BY 1
-		`, tenantID, from, to, currency)
+		`, tenantID, from, to, currency).Scan(&daily).Error
 	} else {
-		dailyQ = r.db.WithContext(ctx).Raw(`
+		dailyErr = r.db.WithContext(ctx).Raw(`
 			SELECT TO_CHAR(paid_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
 				COALESCE(SUM(amount_paid), 0)::bigint AS amount
 			FROM invoices
@@ -232,10 +226,10 @@ func (r *AnalyticsRepo) Revenue(ctx context.Context, tenantID uuid.UUID, from, t
 				AND paid_at >= ? AND paid_at < ?
 			GROUP BY 1
 			ORDER BY 1
-		`, tenantID, from, to)
+		`, tenantID, from, to).Scan(&daily).Error
 	}
-	if err := dailyQ.Scan(&daily).Error; err != nil {
-		return nil, err
+	if dailyErr != nil {
+		return nil, dailyErr
 	}
 	for _, d := range daily {
 		result.Daily = append(result.Daily, domain.RevenueDailyPoint{

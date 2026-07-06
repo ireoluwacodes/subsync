@@ -1,0 +1,92 @@
+# Build with AI
+
+SubSync ships an OpenAPI spec designed for LLM-assisted integration. Point your coding agent at the spec rather than guessing endpoint shapes.
+
+## OpenAPI URL
+
+```
+{[base_url]}/openapi.json
+```
+
+The spec includes:
+
+- All **API key** integrator routes (plans, customers, subscriptions, invoices, webhooks, portal)
+- Required `responses` on every operation (validates in Postman and most OpenAPI tools)
+- `apiKeyAuth` security scheme — `Authorization: Bearer ssk_...`
+
+It **excludes** dashboard auth, settings, and analytics.
+
+## Recommended workflow
+
+1. **Import OpenAPI** into your agent context (Cursor, Claude, Copilot, etc.).
+2. **Provide your API key** via environment variable — never paste production keys into chat logs.
+3. **Describe the user journey**, not individual endpoints:
+
+   > "When a user clicks Subscribe on my SaaS, create a SubSync customer if needed, start checkout, redirect to checkout_url, and unlock access when subscription.updated webhook fires with state active."
+
+4. **Cross-check** generated code against [Quick Start](/quickstart) and [Subscription checkout](/guides/subscription-checkout).
+
+## Example prompts
+
+### Integrator signup flow
+
+```
+Using SubSync OpenAPI at {[base_url]}/openapi.json:
+
+Implement a Node.js handler for POST /subscribe that:
+1. Creates or finds a SubSync customer by external_id
+2. Calls POST {[base_url]}/api/v1/subscriptions/checkout with success_url and cancel_url
+3. Returns { checkoutUrl } to the frontend
+
+Auth: Authorization: Bearer process.env.SUBSYNC_API_KEY
+```
+
+### Webhook receiver
+
+```
+Write an Express route for SubSync outbound webhooks.
+Verify SubSync-Signature header.
+On subscription.updated with state "active", set user.subscriptionActive = true in our DB.
+On invoice.payment_failed, send a dunning email.
+```
+
+### Transfer + card capture
+
+```
+Our checkout uses allow_bank_transfer: true.
+After Nomba payment_success, subscription may be active without payment_method_id.
+Implement a "Add card for renewals" button that calls
+POST {[base_url]}/api/v1/subscriptions/:id/capture-payment-method and redirects to checkout_url.
+```
+
+## Postman collection
+
+Generate locally:
+
+```bash
+python3 scripts/build_postman_collection.py > postman/collection.json
+```
+
+The collection includes **Start Checkout**, **Start Checkout (with bank transfer)**, and **Capture Payment Method** requests with test scripts that save `subscription_id`.
+
+## What to tell the model about money
+
+- Amounts are in **minor units** (kobo for NGN): `100000` = ₦1,000.00
+- Trial checkout charges **₦100** for card verification, not the full plan price
+- Non-trial checkout charges the **full plan amount** on first payment
+
+## Pitfalls for LLMs
+
+| Mistake | Correct approach |
+|---------|------------------|
+| Embedding Nomba card fields in your UI | Use `POST {[base_url]}/api/v1/subscriptions/checkout` → redirect to `checkout_url` |
+| Forgetting outbound webhooks | Register `POST {[base_url]}/api/v1/webhook-endpoints` so your app learns when checkout completes |
+| Using JWT for server integration | Use `ssk_` API key |
+| Expecting transfer renewals without a card | Call capture-payment-method or portal before `next_billing_at` |
+| Calling `{[base_url]}/api/v1/auth/register` from integrator code | Register once in dashboard; store API key securely |
+
+## Related docs
+
+- [API Reference](/api-reference)
+- [Conventions](/guides/conventions)
+- [Troubleshooting](/guides/troubleshooting)

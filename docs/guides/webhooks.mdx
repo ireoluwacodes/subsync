@@ -1,0 +1,95 @@
+# Outbound Webhooks
+
+SubSync can POST events to your application when subscriptions, invoices, or payment methods change. Use this to unlock product access, sync CRM records, or trigger your own emails.
+
+## Register an endpoint
+
+```
+POST {[base_url]}/api/v1/webhook-endpoints
+Authorization: Bearer ssk_...
+```
+
+```json
+{
+  "url": "https://yourapp.com/webhooks/subsync",
+  "events": ["subscription.updated", "invoice.paid"],
+  "is_active": true
+}
+```
+
+Use `"events": ["*"]` for all event types. Maximum **5 endpoints** per tenant.
+
+## Event types
+
+| Event | When |
+|-------|------|
+| `subscription.created` | New subscription record |
+| `subscription.updated` | State or fields changed |
+| `subscription.canceled` | Subscription canceled |
+| `invoice.created` | New invoice |
+| `invoice.paid` | Invoice successfully paid |
+| `invoice.payment_failed` | Charge failed |
+| `payment_method.attached` | Card saved to customer |
+
+## Payload shape
+
+Deliveries are JSON POSTs to your URL. Payload includes event type and resource snapshot (e.g. `id`, `state` for subscriptions).
+
+Inspect recent deliveries:
+
+```
+GET {[base_url]}/api/v1/webhook-endpoints/:id/deliveries
+```
+
+## Signature verification
+
+Each delivery includes a `SubSync-Signature` header. Verify before trusting the body:
+
+1. Read raw request body (do not parse JSON first)
+2. Compute HMAC with your tenant's webhook signing secret
+3. Compare to header value
+
+The signing secret is generated at tenant registration (`WEBHOOK_SIGNING_SECRET` env or per-tenant secret in DB). Store it securely on your server.
+
+<Callout icon="🔐" theme="warning">
+  Always verify signatures in production. Unverified webhooks are an easy path to fraudulent "paid" states.
+</Callout>
+
+## Recommended events by use case
+
+| Your goal | Subscribe to |
+|-----------|--------------|
+| Unlock SaaS access after signup | `subscription.updated`, `invoice.paid` |
+| Revoke access on cancel | `subscription.canceled` |
+| Dunning / payment failed emails | `invoice.payment_failed` |
+| Sync billing to CRM | `subscription.updated`, `invoice.paid` |
+
+## Checkout unlock pattern
+
+```
+1. User completes Nomba checkout
+2. Nomba → SubSync inbound webhook
+3. SubSync → your outbound webhook: subscription.updated { state: "active" }
+4. Your handler: grant access for customer external_id
+```
+
+Map SubSync customer → your user via `external_id` set at customer creation.
+
+## Retry behavior
+
+Failed deliveries (non-2xx, timeout) are retried automatically. Check delivery logs in the dashboard or via `GET {[base_url]}/api/v1/webhook-endpoints/:id/deliveries` when debugging.
+
+## Manage endpoints
+
+| Method | Path |
+|--------|------|
+| `GET` | `{[base_url]}/api/v1/webhook-endpoints` |
+| `GET` | `{[base_url]}/api/v1/webhook-endpoints/:id` |
+| `PUT` | `{[base_url]}/api/v1/webhook-endpoints/:id` |
+| `DELETE` | `{[base_url]}/api/v1/webhook-endpoints/:id` |
+
+## Related
+
+- [Quick Start](/quickstart) — step 7
+- [Security](/guides/security)
+- [Nomba integration](/guides/nomba) — inbound vs outbound webhooks
