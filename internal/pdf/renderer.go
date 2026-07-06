@@ -8,7 +8,6 @@ import (
 	"github.com/go-pdf/fpdf"
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/domain"
-	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
 type Renderer struct{}
@@ -47,17 +46,17 @@ func (r *Renderer) RenderInvoice(
 func (r *Renderer) drawHeader(pdf *fpdf.Fpdf, theme brandTheme, tenant *domain.Tenant, inv *domain.Invoice) {
 	pdf.SetFont("Helvetica", "B", 22)
 	pdf.SetTextColor(theme.AccentR, theme.AccentG, theme.AccentB)
-	pdf.Cell(0, 10, theme.CompanyName)
+	pdf.Cell(0, 10, pdfText(theme.CompanyName))
 	pdf.Ln(6)
 
 	pdf.SetFont("Helvetica", "", 9)
 	pdf.SetTextColor(theme.MutedR, theme.MutedG, theme.MutedB)
 	if tenant.Email != "" {
-		pdf.Cell(0, 4, tenant.Email)
+		pdf.Cell(0, 4, pdfText(tenant.Email))
 		pdf.Ln(4)
 	}
 	if tenant.Website != "" {
-		pdf.Cell(0, 4, tenant.Website)
+		pdf.Cell(0, 4, pdfText(tenant.Website))
 		pdf.Ln(4)
 	}
 
@@ -78,11 +77,13 @@ func (r *Renderer) drawHeader(pdf *fpdf.Fpdf, theme brandTheme, tenant *domain.T
 	pdf.SetTextColor(theme.MutedR, theme.MutedG, theme.MutedB)
 	pdf.SetX(120)
 	pdf.CellFormat(72, 5, "Invoice #"+shortID(inv.ID), "", 1, "R", false, 0, "")
-	pdf.SetX(120)
-	pdf.CellFormat(72, 5, "Issued "+inv.CreatedAt.UTC().Format("2 Jan 2006"), "", 1, "R", false, 0, "")
-	if inv.DueDate != nil {
+	if issued := invoiceIssuedAt(inv); !issued.IsZero() {
 		pdf.SetX(120)
-		pdf.CellFormat(72, 5, "Due "+inv.DueDate.UTC().Format("2 Jan 2006"), "", 1, "R", false, 0, "")
+		pdf.CellFormat(72, 5, "Issued "+formatDatePDF(issued), "", 1, "R", false, 0, "")
+	}
+	if inv.DueDate != nil && !inv.DueDate.IsZero() {
+		pdf.SetX(120)
+		pdf.CellFormat(72, 5, "Due "+formatDatePDF(inv.DueDate.UTC()), "", 1, "R", false, 0, "")
 	}
 
 	pdf.SetXY(18, yStart)
@@ -119,17 +120,16 @@ func (r *Renderer) drawParties(pdf *fpdf.Fpdf, theme brandTheme, tenant *domain.
 	}
 
 	pdf.SetX(18)
-	pdf.Cell(colW, 5, name)
+	pdf.Cell(colW, 5, pdfText(name))
 	pdf.SetX(18 + colW + 6)
-	period := inv.PeriodStart.UTC().Format("2 Jan 2006") + " – " + inv.PeriodEnd.UTC().Format("2 Jan 2006")
-	pdf.Cell(colW, 5, period)
+	pdf.Cell(colW, 5, formatPeriodPDF(inv.PeriodStart, inv.PeriodEnd))
 
 	if email != "" {
 		pdf.Ln(5)
 		pdf.SetX(18)
 		pdf.SetFont("Helvetica", "", 9)
 		pdf.SetTextColor(theme.MutedR, theme.MutedG, theme.MutedB)
-		pdf.Cell(colW, 5, email)
+		pdf.Cell(colW, 5, pdfText(email))
 	}
 
 	pdf.Ln(10)
@@ -172,8 +172,8 @@ func (r *Renderer) drawLineItems(pdf *fpdf.Fpdf, theme brandTheme, inv *domain.I
 		if desc == "" {
 			desc = "Line item"
 		}
-		pdf.CellFormat(descW, 8, "  "+desc, "LR", 0, "L", true, 0, "")
-		pdf.CellFormat(amtW, 8, utils.FormatMoneyDisplay(item.Amount, currency)+"  ", "LR", 1, "R", true, 0, "")
+		pdf.CellFormat(descW, 8, "  "+pdfText(desc), "LR", 0, "L", true, 0, "")
+		pdf.CellFormat(amtW, 8, formatMoneyPDF(item.Amount, currency)+"  ", "LR", 1, "R", true, 0, "")
 		fill = !fill
 	}
 	pdf.CellFormat(descW+amtW, 0, "", "T", 1, "", false, 0, "")
@@ -181,42 +181,43 @@ func (r *Renderer) drawLineItems(pdf *fpdf.Fpdf, theme brandTheme, inv *domain.I
 }
 
 func (r *Renderer) drawTotals(pdf *fpdf.Fpdf, theme brandTheme, inv *domain.Invoice) {
-	labelX := 120.0
-	valW := 56.0
+	const (
+		blockX = 110.0
+		labelW = 42.0
+		valueW = 40.0
+		rowH   = 7.0
+	)
 
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.SetTextColor(theme.MutedR, theme.MutedG, theme.MutedB)
-	pdf.SetX(labelX)
-	pdf.CellFormat(30, 7, "Amount due", "", 0, "R", false, 0, "")
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.SetTextColor(24, 24, 27)
-	pdf.CellFormat(valW, 7, utils.FormatMoneyDisplay(inv.AmountDue, inv.Currency), "", 1, "R", false, 0, "")
-
-	if inv.AmountPaid > 0 {
-		pdf.SetX(labelX)
+	writeAmountRow := func(label, value string, valueR, valueG, valueB int) {
+		pdf.SetX(blockX)
+		pdf.SetFont("Helvetica", "", 10)
 		pdf.SetTextColor(theme.MutedR, theme.MutedG, theme.MutedB)
-		pdf.CellFormat(30, 7, "Amount paid", "", 0, "R", false, 0, "")
-		pdf.SetTextColor(22, 101, 52)
-		pdf.CellFormat(valW, 7, utils.FormatMoneyDisplay(inv.AmountPaid, inv.Currency), "", 1, "R", false, 0, "")
+		pdf.CellFormat(labelW, rowH, label, "", 0, "R", false, 0, "")
+		pdf.SetTextColor(valueR, valueG, valueB)
+		pdf.CellFormat(valueW, rowH, value, "", 1, "R", false, 0, "")
 	}
 
-	if inv.PaidAt != nil {
-		pdf.SetX(labelX)
+	writeAmountRow("Amount due", formatMoneyPDF(inv.AmountDue, inv.Currency), 24, 24, 27)
+
+	if inv.AmountPaid > 0 {
+		writeAmountRow("Amount paid", formatMoneyPDF(inv.AmountPaid, inv.Currency), 22, 101, 52)
+	}
+
+	if inv.PaidAt != nil && !inv.PaidAt.IsZero() {
+		pdf.SetX(blockX)
 		pdf.SetFont("Helvetica", "", 8)
 		pdf.SetTextColor(theme.MutedR, theme.MutedG, theme.MutedB)
-		pdf.CellFormat(30, 5, "Paid on", "", 0, "R", false, 0, "")
-		pdf.CellFormat(valW, 5, inv.PaidAt.UTC().Format("2 Jan 2006, 15:04 UTC"), "", 1, "R", false, 0, "")
+		pdf.CellFormat(labelW, 5, "Paid on", "", 0, "R", false, 0, "")
+		pdf.SetTextColor(24, 24, 27)
+		pdf.CellFormat(valueW, 5, formatDatePDF(inv.PaidAt.UTC())+", "+inv.PaidAt.UTC().Format("15:04")+" UTC", "", 1, "R", false, 0, "")
 	}
 
 	pdf.Ln(2)
 	pdf.SetDrawColor(theme.AccentR, theme.AccentG, theme.AccentB)
 	pdf.SetLineWidth(0.4)
-	pdf.Line(labelX, pdf.GetY(), 192, pdf.GetY())
+	pdf.Line(blockX, pdf.GetY(), blockX+labelW+valueW, pdf.GetY())
 	pdf.Ln(4)
 
-	pdf.SetX(labelX)
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.SetTextColor(theme.AccentR, theme.AccentG, theme.AccentB)
 	balance := inv.AmountDue - inv.AmountPaid
 	if balance < 0 {
 		balance = 0
@@ -224,8 +225,13 @@ func (r *Renderer) drawTotals(pdf *fpdf.Fpdf, theme brandTheme, inv *domain.Invo
 	if inv.Status == domain.InvoiceStatusPaid {
 		balance = 0
 	}
-	pdf.CellFormat(30, 8, "Balance", "", 0, "R", false, 0, "")
-	pdf.CellFormat(valW, 8, utils.FormatMoneyDisplay(balance, inv.Currency), "", 1, "R", false, 0, "")
+
+	pdf.SetX(blockX)
+	pdf.SetFont("Helvetica", "B", 11)
+	pdf.SetTextColor(theme.MutedR, theme.MutedG, theme.MutedB)
+	pdf.CellFormat(labelW, 8, "Balance", "", 0, "R", false, 0, "")
+	pdf.SetTextColor(theme.AccentR, theme.AccentG, theme.AccentB)
+	pdf.CellFormat(valueW, 8, formatMoneyPDF(balance, inv.Currency), "", 1, "R", false, 0, "")
 }
 
 func (r *Renderer) drawFooter(pdf *fpdf.Fpdf, theme brandTheme) {
