@@ -192,18 +192,29 @@ func DunningFinalHTML(tenantName string) (subject, htmlOut string) {
 	return subject, htmlOut
 }
 
-func SubscriptionConfirmedHTML(tenantName string, amount int64, currency string) (subject, htmlOut string) {
+func SubscriptionConfirmedHTML(tenantName string, amount int64, currency, portalURL string) (subject, htmlOut string) {
 	subject = "Payment received — thank you"
 	tenant := html.EscapeString(tenantName)
-	body := fmt.Sprintf(
-		`<p style="margin:0;">We've received your payment for <strong style="color:%s;">%s</strong>. Your subscription is active.</p>%s`,
-		colorText, tenant, amountLine(amount, currency),
+	paymentLine := `<p style="margin:0;">Your subscription is active.</p>`
+	if amount > 0 && currency != "" {
+		paymentLine = fmt.Sprintf(
+			`<p style="margin:0;">We've received your payment for <strong style="color:%s;">%s</strong>. Your subscription is active.</p>%s`,
+			colorText, tenant, amountLine(amount, currency),
+		)
+	}
+	body := paymentLine + fmt.Sprintf(
+		`<p style="margin:16px 0 0;">You can optionally set up direct debit as a renewal fallback, or add a card for automatic billing — both from your billing portal.</p>`,
 	)
-	htmlOut = emailLayout(layoutOpts{
+	opts := layoutOpts{
 		eyebrow: "Payment confirmed",
 		heading: "Thank you",
 		body:    body,
-	})
+	}
+	if portalURL != "" {
+		opts.ctaLabel = "Manage billing"
+		opts.ctaURL = portalURL
+	}
+	htmlOut = emailLayout(opts)
 	return subject, htmlOut
 }
 
@@ -236,17 +247,17 @@ func PaymentMethodCaptureRequiredHTML(tenantName, planName, captureURL string) (
 	}
 	body := fmt.Sprintf(
 		`<p style="margin:0;">Your first payment with <strong style="color:%s;">%s</strong>%s was received via bank transfer.</p>
-		<p style="margin:16px 0 0;">Add a debit or credit card before your next billing date so renewals can run automatically. A small card verification charge (₦100) may apply.</p>`,
+		<p style="margin:16px 0 0;">Before your next billing date, add a card <em>or</em> set up direct debit from your billing portal so renewals can run automatically. Card verification may include a small ₦100 charge.</p>`,
 		colorText, tenant, planLine,
 	)
 	opts := layoutOpts{
 		eyebrow: "Action required",
-		heading: "Save a card for renewals",
+		heading: "Save a payment method",
 		body:    body,
 		accent:  colorWarn,
 	}
 	if captureURL != "" {
-		opts.ctaLabel = "Add payment card"
+		opts.ctaLabel = "Open billing portal"
 		opts.ctaURL = captureURL
 	}
 	htmlOut = emailLayout(opts)
@@ -267,18 +278,18 @@ func PaymentMethodCaptureReminderHTML(tenantName, planName, captureURL string, d
 		when = fmt.Sprintf("in %d days", daysUntilBilling)
 	}
 	body := fmt.Sprintf(
-		`<p style="margin:0;">Your subscription with <strong style="color:%s;">%s</strong>%s renews %s, but no card is saved for automatic billing.</p>
-		<p style="margin:16px 0 0;">Add a debit or credit card now to keep your subscription active. Without a card on file, the subscription will be canceled on the renewal date.</p>`,
+		`<p style="margin:0;">Your subscription with <strong style="color:%s;">%s</strong>%s renews %s, but no chargeable payment method is saved yet.</p>
+		<p style="margin:16px 0 0;">Add a card or set up direct debit from your billing portal to keep your subscription active.</p>`,
 		colorText, tenant, planLine, when,
 	)
 	opts := layoutOpts{
 		eyebrow: "Action required",
-		heading: "Save a card for renewals",
+		heading: "Save a payment method",
 		body:    body,
 		accent:  colorWarn,
 	}
 	if captureURL != "" {
-		opts.ctaLabel = "Add payment card"
+		opts.ctaLabel = "Open billing portal"
 		opts.ctaURL = captureURL
 	}
 	htmlOut = emailLayout(opts)
