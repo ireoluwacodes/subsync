@@ -2,6 +2,52 @@ package nomba
 
 import "strings"
 
+// IsPlaceholderToken reports Nomba sentinel values that mean no card token.
+func IsPlaceholderToken(value string) bool {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "", "N/A", "NA", "NULL", "NONE":
+		return true
+	default:
+		return false
+	}
+}
+
+// CheckoutOrderReference returns the SubSync/Nomba order reference used to match invoices.
+// Online checkout webhooks put the checkout order ref on data.order, not transaction.merchantTxRef.
+func CheckoutOrderReference(tx WebhookTransaction, order *WebhookOrder) string {
+	if order != nil {
+		if ref := strings.TrimSpace(order.OrderReference); ref != "" {
+			return ref
+		}
+	}
+	if ref := strings.TrimSpace(tx.MerchantTxRef); ref != "" {
+		return ref
+	}
+	return strings.TrimSpace(tx.AliasAccountReference)
+}
+
+// EffectiveTokenKey returns a usable card token from webhook fields, ignoring Nomba placeholders.
+func EffectiveTokenKey(tx WebhookTransaction, tokenized *WebhookTokenizedCardData) string {
+	if !IsPlaceholderToken(tx.TokenKey) {
+		return strings.TrimSpace(tx.TokenKey)
+	}
+	if tokenized != nil && !IsPlaceholderToken(tokenized.TokenKey) {
+		return strings.TrimSpace(tokenized.TokenKey)
+	}
+	return ""
+}
+
+// IsTransferPayment reports bank-transfer checkout from transaction type and/or order.paymentMethod.
+func IsTransferPayment(tx WebhookTransaction, order *WebhookOrder) bool {
+	if order != nil {
+		switch strings.ToLower(strings.TrimSpace(order.PaymentMethod)) {
+		case "bank_transfer", "transfer":
+			return true
+		}
+	}
+	return IsTransferTransaction(tx)
+}
+
 // IsTransferTransaction reports whether a Nomba payment_success transaction was paid via bank transfer.
 func IsTransferTransaction(tx WebhookTransaction) bool {
 	t := strings.ToLower(strings.TrimSpace(tx.Type))
@@ -13,7 +59,7 @@ func IsTransferTransaction(tx WebhookTransaction) bool {
 
 // IsCardTransaction reports whether the webhook indicates a card payment with a token.
 func IsCardTransaction(tx WebhookTransaction) bool {
-	if tx.TokenKey != "" {
+	if !IsPlaceholderToken(tx.TokenKey) {
 		return true
 	}
 	t := strings.ToLower(strings.TrimSpace(tx.Type))

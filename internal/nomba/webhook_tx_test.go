@@ -21,6 +21,29 @@ func TestIsTransferTransaction(t *testing.T) {
 	}))
 }
 
+func TestIsTransferPayment_onlineCheckoutBankTransfer(t *testing.T) {
+	tx := WebhookTransaction{
+		Type:          "online_checkout",
+		MerchantTxRef: "100004260706175520164629180694",
+	}
+	order := &WebhookOrder{PaymentMethod: "bank_transfer"}
+	require.True(t, IsTransferPayment(tx, order))
+	require.False(t, IsTransferPayment(tx, nil))
+}
+
+func TestCheckoutOrderReference_prefersOrderField(t *testing.T) {
+	tx := WebhookTransaction{MerchantTxRef: "nomba-internal-ref"}
+	order := &WebhookOrder{OrderReference: "e50530f0-2a12-44b8-b3c1-40c9e654bff3"}
+	require.Equal(t, "e50530f0-2a12-44b8-b3c1-40c9e654bff3", CheckoutOrderReference(tx, order))
+}
+
+func TestEffectiveTokenKey_ignoresPlaceholder(t *testing.T) {
+	tx := WebhookTransaction{}
+	tokenized := &WebhookTokenizedCardData{TokenKey: "N/A"}
+	require.Equal(t, "", EffectiveTokenKey(tx, tokenized))
+	require.True(t, IsPlaceholderToken("N/A"))
+}
+
 func TestParsePaymentMethods(t *testing.T) {
 	require.Equal(t, []PaymentMethod{PaymentMethodCard}, ParsePaymentMethods([]string{"Card"}))
 	require.Equal(t, []PaymentMethod{PaymentMethodCard, PaymentMethodTransfer},

@@ -31,6 +31,7 @@ func (r *Registry) RegisterAll() {
 	r.mux.HandleFunc(TaskInvoicePDF, r.handleInvoicePDF)
 	r.mux.HandleFunc(TaskBillingReconcile, r.handleBillingReconcileProcessing)
 	r.mux.HandleFunc(TaskPaymentMethodReminders, r.handlePaymentMethodReminders)
+	r.mux.HandleFunc(TaskMandatePollStatus, r.handleMandatePollStatus)
 }
 
 type taskPayload struct {
@@ -54,6 +55,18 @@ func (r *Registry) handlePaymentMethodReminders(ctx context.Context, t *asynq.Ta
 		return err
 	}
 	zap.L().Info("billing:payment_method_reminders complete", zap.Int("sent", n))
+	return nil
+}
+
+func (r *Registry) handleMandatePollStatus(ctx context.Context, t *asynq.Task) error {
+	if r.handlers.Mandates == nil {
+		return nil
+	}
+	n, err := r.handlers.Mandates.ProcessPendingMandates(ctx, 50)
+	if err != nil {
+		return err
+	}
+	zap.L().Info("mandate:poll_status complete", zap.Int("processed", n))
 	return nil
 }
 

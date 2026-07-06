@@ -21,6 +21,7 @@ type Handlers struct {
 	Tenants  *service.TenantService
 	Nomba    *nomba.Client
 	Email    *email.MailerService
+	Mandates *service.MandateService
 	Storage  *storage.StorageService
 	Repos    *db.Repos
 	Queue    *queue.Queue

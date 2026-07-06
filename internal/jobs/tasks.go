@@ -10,4 +10,5 @@ const (
 	TaskInvoicePDF            = "invoice:pdf"
 	TaskBillingReconcile         = "billing:reconcile_processing"
 	TaskPaymentMethodReminders   = "billing:payment_method_reminders"
+	TaskMandatePollStatus        = "mandate:poll_status"
 )

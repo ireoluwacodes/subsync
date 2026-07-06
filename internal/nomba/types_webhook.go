@@ -20,10 +20,27 @@ type WebhookEvent struct {
 }
 
 type WebhookEventData struct {
-	Merchant    WebhookMerchant    `json:"merchant"`
-	Terminal    map[string]any     `json:"terminal,omitempty"`
-	Transaction WebhookTransaction `json:"transaction"`
-	Customer    WebhookCustomer    `json:"customer,omitempty"`
+	Merchant          WebhookMerchant          `json:"merchant"`
+	Terminal          map[string]any           `json:"terminal,omitempty"`
+	Transaction       WebhookTransaction       `json:"transaction"`
+	Customer          WebhookCustomer          `json:"customer,omitempty"`
+	Order             *WebhookOrder            `json:"order,omitempty"`
+	TokenizedCardData *WebhookTokenizedCardData `json:"tokenizedCardData,omitempty"`
+}
+
+// WebhookOrder is present on online checkout payment_success events.
+type WebhookOrder struct {
+	OrderReference         string            `json:"orderReference,omitempty"`
+	PaymentMethod          string            `json:"paymentMethod,omitempty"`
+	OrderMetaData          map[string]string `json:"orderMetaData,omitempty"`
+	CustomerEmail          string            `json:"customerEmail,omitempty"`
+	IsTokenizedCardPayment string            `json:"isTokenizedCardPayment,omitempty"`
+}
+
+// WebhookTokenizedCardData may carry card token fields (often "N/A" for transfers).
+type WebhookTokenizedCardData struct {
+	TokenKey string `json:"tokenKey,omitempty"`
+	CardType string `json:"cardType,omitempty"`
 }
 
 type WebhookMerchant struct {

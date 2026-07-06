@@ -96,30 +96,35 @@ func (s *NombaEventService) dispatch(ctx context.Context, tenantID uuid.UUID, ev
 
 func (s *NombaEventService) handlePaymentSuccess(ctx context.Context, tenantID uuid.UUID, event nomba.WebhookEvent) error {
 	tx := event.Data.Transaction
-	orderRef := tx.MerchantTxRef
-	if orderRef == "" {
-		orderRef = tx.AliasAccountReference
-	}
+	order := event.Data.Order
+	tokenKey := nomba.EffectiveTokenKey(tx, event.Data.TokenizedCardData)
+	orderRef := nomba.CheckoutOrderReference(tx, order)
 
 	if strings.HasPrefix(orderRef, "portal-") {
-		return s.portal.HandlePaymentSuccess(ctx, tenantID, orderRef, tx.TokenKey, tx)
+		return s.portal.HandlePaymentSuccess(ctx, tenantID, orderRef, tokenKey, tx)
 	}
 
 	inv, err := s.matchInvoice(ctx, tenantID, orderRef, tx.TransactionID)
 	if err != nil {
 		return err
 	}
+	if inv == nil {
+		inv, err = s.matchCheckoutInvoiceFromOrderMeta(ctx, tenantID, order)
+		if err != nil {
+			return err
+		}
+	}
 
 	if inv != nil && IsSubscriptionCheckoutInvoice(inv) {
-		return s.billing.CompleteCheckoutFromWebhook(ctx, tenantID, inv, tx.TokenKey, tx.TransactionID, tx)
+		return s.billing.CompleteCheckoutFromWebhook(ctx, tenantID, inv, tokenKey, tx.TransactionID, tx, order)
 	}
 
 	if subID, ok := ParseCheckoutSubscriptionID(orderRef); ok {
-		return s.billing.CompleteTrialCheckoutFromWebhook(ctx, tenantID, subID, tx.TokenKey, tx.TransactionID, tx)
+		return s.billing.CompleteTrialCheckoutFromWebhook(ctx, tenantID, subID, tokenKey, tx.TransactionID, tx, order)
 	}
 
 	if subID, ok := ParseCardCaptureSubscriptionID(orderRef); ok {
-		return s.billing.CompleteCardCaptureFromWebhook(ctx, tenantID, subID, tx.TokenKey, tx)
+		return s.billing.CompleteCardCaptureFromWebhook(ctx, tenantID, subID, tokenKey, tx)
 	}
 
 	if inv == nil && orderRef == "" {
@@ -129,6 +134,34 @@ func (s *NombaEventService) handlePaymentSuccess(ctx context.Context, tenantID u
 		return nil
 	}
 	return s.billing.FinalizePaidInvoice(ctx, tenantID, inv.ID, tx.TransactionID)
+}
+
+func (s *NombaEventService) matchCheckoutInvoiceFromOrderMeta(ctx context.Context, tenantID uuid.UUID, order *nomba.WebhookOrder) (*domain.Invoice, error) {
+	if order == nil || order.OrderMetaData == nil {
+		return nil, nil
+	}
+	if order.OrderMetaData["purpose"] != domain.InvoicePurposeSubscriptionCheckout {
+		return nil, nil
+	}
+	subID, err := uuid.Parse(order.OrderMetaData["subscription_id"])
+	if err != nil {
+		return nil, nil
+	}
+	subIDFilter := subID
+	invoices, _, err := s.repos.Invoices.List(ctx, tenantID, domain.InvoiceListFilter{
+		SubscriptionID: &subIDFilter,
+		Status:         string(domain.InvoiceStatusOpen),
+		Limit:          10,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, inv := range invoices {
+		if IsSubscriptionCheckoutInvoice(inv) {
+			return inv, nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *NombaEventService) handlePaymentFailed(ctx context.Context, tenantID uuid.UUID, event nomba.WebhookEvent) error {
