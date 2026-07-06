@@ -60,8 +60,9 @@ type Subscription struct {
 	TenantID           uuid.UUID  `gorm:"type:uuid;not null;index"`
 	CustomerID         uuid.UUID  `gorm:"type:uuid;not null;index"`
 	PlanID             uuid.UUID  `gorm:"type:uuid;not null"`
-	PaymentMethodID    *uuid.UUID `gorm:"type:uuid"`
-	State              string     `gorm:"not null;default:trialing"`
+	PaymentMethodID           *uuid.UUID `gorm:"type:uuid"`
+	FallbackPaymentMethodID   *uuid.UUID `gorm:"column:fallback_payment_method_id;type:uuid"`
+	State                     string     `gorm:"not null;default:trialing"`
 	TrialEndsAt        *time.Time `gorm:"column:trial_ends_at"`
 	CurrentPeriodStart time.Time  `gorm:"column:current_period_start;not null"`
 	CurrentPeriodEnd   time.Time  `gorm:"column:current_period_end;not null"`
@@ -172,8 +173,9 @@ type PaymentMethod struct {
 	CustomerID uuid.UUID `gorm:"type:uuid;not null;index"`
 	Type       string    `gorm:"not null"`
 	TokenKey   *string   `gorm:"column:token_key"`
-	MandateID  *string   `gorm:"column:mandate_id"`
-	CardLast4  *string   `gorm:"column:card_last4"`
+	MandateID     *string `gorm:"column:mandate_id"`
+	MandateStatus *string `gorm:"column:mandate_status"`
+	CardLast4     *string `gorm:"column:card_last4"`
 	CardBrand  *string   `gorm:"column:card_brand"`
 	CardExpiry *string   `gorm:"column:card_expiry"`
 	IsDefault  bool      `gorm:"column:is_default;not null;default:false"`

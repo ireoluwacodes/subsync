@@ -104,8 +104,9 @@ func SubscriptionToDomain(m *Subscription) *domain.Subscription {
 		TenantID:           m.TenantID,
 		CustomerID:         m.CustomerID,
 		PlanID:             m.PlanID,
-		PaymentMethodID:    m.PaymentMethodID,
-		State:              domain.SubscriptionState(m.State),
+		PaymentMethodID:           m.PaymentMethodID,
+		FallbackPaymentMethodID:   m.FallbackPaymentMethodID,
+		State:                     domain.SubscriptionState(m.State),
 		TrialEndsAt:        m.TrialEndsAt,
 		CurrentPeriodStart: m.CurrentPeriodStart,
 		CurrentPeriodEnd:   m.CurrentPeriodEnd,
@@ -132,8 +133,9 @@ func SubscriptionFromDomain(s *domain.Subscription) (*Subscription, error) {
 		TenantID:           s.TenantID,
 		CustomerID:         s.CustomerID,
 		PlanID:             s.PlanID,
-		PaymentMethodID:    s.PaymentMethodID,
-		State:              string(s.State),
+		PaymentMethodID:           s.PaymentMethodID,
+		FallbackPaymentMethodID:   s.FallbackPaymentMethodID,
+		State:                     string(s.State),
 		TrialEndsAt:        s.TrialEndsAt,
 		CurrentPeriodStart: s.CurrentPeriodStart,
 		CurrentPeriodEnd:   s.CurrentPeriodEnd,
@@ -401,6 +403,9 @@ func PaymentMethodToDomain(m *PaymentMethod) *domain.PaymentMethod {
 	if m.MandateID != nil {
 		pm.MandateID = *m.MandateID
 	}
+	if m.MandateStatus != nil {
+		pm.MandateStatus = domain.MandateStatus(*m.MandateStatus)
+	}
 	if m.CardLast4 != nil {
 		pm.CardLast4 = *m.CardLast4
 	}
@@ -427,6 +432,10 @@ func PaymentMethodFromDomain(pm *domain.PaymentMethod) *PaymentMethod {
 	if pm.MandateID != "" {
 		v := pm.MandateID
 		m.MandateID = &v
+	}
+	if pm.MandateStatus != "" {
+		v := string(pm.MandateStatus)
+		m.MandateStatus = &v
 	}
 	if pm.CardLast4 != "" {
 		v := pm.CardLast4

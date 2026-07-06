@@ -15,6 +15,7 @@ const (
 	SubscriptionMetaPMReminder7dSent        = "pm_reminder_7d_sent"
 	SubscriptionMetaPMReminder3dSent        = "pm_reminder_3d_sent"
 	SubscriptionMetaPMReminder1dSent        = "pm_reminder_1d_sent"
+	SubscriptionMetaMandateInstructions     = "mandate_instructions"
 )
 
 const (
@@ -32,8 +33,9 @@ type Subscription struct {
 	TenantID           uuid.UUID
 	CustomerID         uuid.UUID
 	PlanID             uuid.UUID
-	PaymentMethodID    *uuid.UUID
-	State              SubscriptionState
+	PaymentMethodID          *uuid.UUID
+	FallbackPaymentMethodID  *uuid.UUID
+	State                    SubscriptionState
 	TrialEndsAt        *time.Time
 	CurrentPeriodStart time.Time
 	CurrentPeriodEnd   time.Time
