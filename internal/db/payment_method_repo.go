@@ -28,6 +28,15 @@ func (r *PaymentMethodRepo) Create(ctx context.Context, pm *domain.PaymentMethod
 	return nil
 }
 
+func (r *PaymentMethodRepo) Update(ctx context.Context, pm *domain.PaymentMethod) error {
+	m := models.PaymentMethodFromDomain(pm)
+	if err := r.db.WithContext(ctx).Save(m).Error; err != nil {
+		return MapGORMError(err)
+	}
+	*pm = *models.PaymentMethodToDomain(m)
+	return nil
+}
+
 func (r *PaymentMethodRepo) GetDefaultForCustomer(ctx context.Context, tenantID, customerID uuid.UUID) (*domain.PaymentMethod, error) {
 	var m models.PaymentMethod
 	err := r.db.WithContext(ctx).
@@ -48,6 +57,61 @@ func (r *PaymentMethodRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID)
 		return nil, MapGORMError(err)
 	}
 	return models.PaymentMethodToDomain(&m), nil
+}
+
+func (r *PaymentMethodRepo) ListByCustomer(ctx context.Context, tenantID, customerID uuid.UUID) ([]*domain.PaymentMethod, error) {
+	var rows []models.PaymentMethod
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND customer_id = ?", tenantID, customerID).
+		Order("created_at ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	out := make([]*domain.PaymentMethod, len(rows))
+	for i := range rows {
+		out[i] = models.PaymentMethodToDomain(&rows[i])
+	}
+	return out, nil
+}
+
+func (r *PaymentMethodRepo) GetDirectDebitForCustomer(ctx context.Context, tenantID, customerID uuid.UUID, preferID *uuid.UUID) (*domain.PaymentMethod, error) {
+	if preferID != nil && *preferID != uuid.Nil {
+		pm, err := r.GetByID(ctx, tenantID, *preferID)
+		if err == nil && pm.Type == domain.PaymentMethodDirectDebit && pm.MandateReady() {
+			return pm, nil
+		}
+	}
+	var m models.PaymentMethod
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND customer_id = ? AND type = ? AND mandate_status = ?",
+			tenantID, customerID, string(domain.PaymentMethodDirectDebit), string(domain.MandateStatusReady)).
+		Order("created_at DESC").
+		First(&m).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	return models.PaymentMethodToDomain(&m), nil
+}
+
+func (r *PaymentMethodRepo) ListPendingMandates(ctx context.Context, limit int) ([]*domain.PaymentMethod, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var rows []models.PaymentMethod
+	err := r.db.WithContext(ctx).
+		Where("type = ? AND mandate_status = ?", string(domain.PaymentMethodDirectDebit), string(domain.MandateStatusPending)).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	out := make([]*domain.PaymentMethod, len(rows))
+	for i := range rows {
+		out[i] = models.PaymentMethodToDomain(&rows[i])
+	}
+	return out, nil
 }
 
 func (r *PaymentMethodRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
