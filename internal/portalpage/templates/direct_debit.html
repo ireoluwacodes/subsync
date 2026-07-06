@@ -1,33 +1,39 @@
 {{define "content"}}
 <div class="card">
+  <span class="eyebrow">Optional fallback</span>
   <h1>Set up direct debit</h1>
-  <p class="muted">{{.TenantName}} · {{.PlanName}}</p>
-  <p style="font-size:.9rem;">Direct debit is an optional fallback for renewals if card payment fails. You will need to complete a one-time NIBSS validation (N50 transfer) after submitting this form.</p>
+  <p class="muted">{{.PlanName}}</p>
+  <p class="lead">Direct debit is used only if a card renewal fails. After submitting this form, you will complete a one-time NIBSS validation (N50 transfer) to activate the mandate.</p>
 </div>
+
 <div class="card">
+  <div class="section-label">Bank details</div>
   <form method="POST" action="/portal/{{.Token}}/direct-debit">
     <label for="customer_name">Full name</label>
-    <input id="customer_name" name="customer_name" value="{{.CustomerName}}" required>
+    <input id="customer_name" name="customer_name" value="{{.CustomerName}}" autocomplete="name" required>
 
-    <label for="customer_account_name">Account name (as on bank statement)</label>
-    <input id="customer_account_name" name="customer_account_name" value="{{.CustomerName}}" required>
+    <label for="customer_account_name">Account name</label>
+    <input id="customer_account_name" name="customer_account_name" value="{{.CustomerName}}" autocomplete="off" required>
+    <p class="field-hint">Must match the name on your bank statement.</p>
 
     <label for="customer_account_number">Account number</label>
-    <input id="customer_account_number" name="customer_account_number" inputmode="numeric" pattern="[0-9]+" required>
+    <input id="customer_account_number" name="customer_account_number" inputmode="numeric" pattern="[0-9]+" autocomplete="off" required>
 
     <label for="bank_code">Bank code</label>
     <input id="bank_code" name="bank_code" inputmode="numeric" pattern="[0-9]+" required placeholder="e.g. 058">
 
     <label for="customer_phone">Phone number</label>
-    <input id="customer_phone" name="customer_phone" type="tel" required placeholder="08012345678">
+    <input id="customer_phone" name="customer_phone" type="tel" autocomplete="tel" required placeholder="08012345678">
 
-    <label for="customer_address">Address (optional)</label>
-    <input id="customer_address" name="customer_address">
+    <label for="customer_address">Address <span style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
+    <input id="customer_address" name="customer_address" autocomplete="street-address">
 
     <input type="hidden" name="customer_email" value="{{.CustomerEmail}}">
 
-    <button type="submit" class="btn btn-primary" style="width:100%;">Submit mandate request</button>
-    <a href="/portal/{{.Token}}" class="btn btn-secondary" style="width:100%;margin-top:.5rem;">Back</a>
+    <div class="actions" style="margin-top:.25rem;">
+      <button type="submit" class="btn btn-primary">Submit mandate request</button>
+      <a href="/portal/{{.Token}}" class="btn btn-secondary">Back to billing</a>
+    </div>
   </form>
 </div>
 {{end}}

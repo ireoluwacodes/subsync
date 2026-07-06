@@ -37,6 +37,14 @@ func (r *SubscriptionRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) 
 	return models.SubscriptionToDomain(&m), nil
 }
 
+func (r *SubscriptionRepo) GetByIDGlobal(ctx context.Context, id uuid.UUID) (*domain.Subscription, error) {
+	var m models.Subscription
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+		return nil, MapGORMError(err)
+	}
+	return models.SubscriptionToDomain(&m), nil
+}
+
 func (r *SubscriptionRepo) List(ctx context.Context, tenantID uuid.UUID, filter domain.SubscriptionListFilter) ([]*domain.Subscription, int64, error) {
 	q := r.db.WithContext(ctx).Model(&models.Subscription{}).Where("tenant_id = ?", tenantID)
 	if filter.CustomerID != nil {

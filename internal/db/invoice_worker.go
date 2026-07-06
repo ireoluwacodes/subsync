@@ -50,6 +50,17 @@ func (r *InvoiceRepo) GetByNombaOrderRef(ctx context.Context, tenantID uuid.UUID
 	return models.InvoiceToDomain(&m), nil
 }
 
+func (r *InvoiceRepo) FindByNombaOrderRef(ctx context.Context, orderRef string) (*domain.Invoice, error) {
+	var m models.Invoice
+	err := r.db.WithContext(ctx).
+		Where("nomba_order_ref = ?", orderRef).
+		First(&m).Error
+	if err != nil {
+		return nil, MapGORMError(err)
+	}
+	return models.InvoiceToDomain(&m), nil
+}
+
 func (r *InvoiceRepo) GetByNombaTransactionID(ctx context.Context, tenantID uuid.UUID, transactionID string) (*domain.Invoice, error) {
 	var m models.Invoice
 	err := r.db.WithContext(ctx).

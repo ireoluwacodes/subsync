@@ -47,6 +47,7 @@ func SetupRouter(deps Dependencies) *gin.Engine {
 
 	RegisterNombaWebhookRoutes(r, deps.NombaWebhookHandler)
 	RegisterPortalPublicRoutes(r, deps.PortalHandler)
+	RegisterBillingReturnRoutes(r, deps.BillingReturnHandler)
 
 	return r
 }

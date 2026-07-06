@@ -305,7 +305,7 @@ func (h *SubscriptionHandler) ListForCustomer(c *gin.Context) {
 type subscriptionCheckoutRequest struct {
 	CustomerID            string   `json:"customer_id" binding:"required"`
 	PlanID                string   `json:"plan_id" binding:"required"`
-	SuccessURL            string   `json:"success_url" binding:"required"`
+	SuccessURL            string   `json:"success_url"`
 	CancelURL             string   `json:"cancel_url"`
 	SendCheckoutEmail     bool     `json:"send_checkout_email"`
 	CardOnly              bool     `json:"card_only"`
@@ -314,7 +314,7 @@ type subscriptionCheckoutRequest struct {
 }
 
 type cardCaptureRequest struct {
-	SuccessURL string `json:"success_url" binding:"required"`
+	SuccessURL string `json:"success_url"`
 	CancelURL  string `json:"cancel_url"`
 	SendEmail  bool   `json:"send_email"`
 }

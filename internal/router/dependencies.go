@@ -26,6 +26,7 @@ type Dependencies struct {
 	PaymentMethodHandler *handlers.PaymentMethodHandler
 	WebhookHandler       *handlers.WebhookHandler
 	PortalHandler        *handlers.PortalHandler
+	BillingReturnHandler *handlers.BillingReturnHandler
 	AnalyticsHandler     *handlers.AnalyticsHandler
 	NombaWebhookHandler  *handlers.NombaWebhookHandler
 }

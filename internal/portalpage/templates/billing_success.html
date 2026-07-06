@@ -1,0 +1,51 @@
+{{define "content"}}
+<div class="card">
+  <div class="outcome-hero {{if eq .OutcomeBadge "ok"}}success{{else if eq .OutcomeBadge "warn"}}pending{{else if eq .Outcome "failed"}}failed{{end}}">
+    <div class="outcome-icon">{{if eq .OutcomeBadge "ok"}}✓{{else if eq .OutcomeBadge "warn"}}…{{else}}!{{end}}</div>
+    <span class="eyebrow">Checkout</span>
+    <h1>{{.StatusLabel}}</h1>
+    <p class="lead">{{.StatusMessage}}</p>
+    {{if .Outcome}}
+    <div class="status-row" style="justify-content:center;margin-top:1rem;">
+      <span class="badge {{.OutcomeBadge}}">{{.Outcome}}</span>
+    </div>
+    {{end}}
+  </div>
+
+  {{if or .TenantName .AmountDisplay .SubscriptionState .OrderReference .OrderID}}
+  <hr class="divider">
+  <div class="detail-grid">
+    {{if .TenantName}}
+    <div class="detail">
+      <span>Merchant</span>
+      <span>{{.TenantName}}{{if .PlanName}} · {{.PlanName}}{{end}}</span>
+    </div>
+    {{end}}
+    {{if .AmountDisplay}}
+    <div class="detail">
+      <span>Amount</span>
+      <span>{{.AmountDisplay}}</span>
+    </div>
+    {{end}}
+    {{if .SubscriptionState}}
+    <div class="detail">
+      <span>Subscription</span>
+      <span>{{.SubscriptionState}}</span>
+    </div>
+    {{end}}
+    {{if .OrderReference}}
+    <div class="detail">
+      <span>Order reference</span>
+      <span>{{.OrderReference}}</span>
+    </div>
+    {{end}}
+    {{if .OrderID}}
+    <div class="detail">
+      <span>Order ID</span>
+      <span>{{.OrderID}}</span>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}

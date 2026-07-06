@@ -85,9 +85,11 @@ type SubscriptionCheckoutResult struct {
 }
 
 func (s *SubscriptionCheckoutService) StartCheckout(ctx context.Context, tenantID uuid.UUID, in SubscriptionCheckoutInput) (*SubscriptionCheckoutResult, error) {
-	if err := validateRedirectURL(in.SuccessURL, s.cfg); err != nil {
+	successURL, err := resolveCheckoutSuccessURL(in.SuccessURL, s.cfg)
+	if err != nil {
 		return nil, err
 	}
+	in.SuccessURL = successURL
 	if in.CancelURL != "" {
 		if err := validateRedirectURL(in.CancelURL, s.cfg); err != nil {
 			return nil, err
@@ -116,9 +118,11 @@ func (s *SubscriptionCheckoutService) StartCheckout(ctx context.Context, tenantI
 }
 
 func (s *SubscriptionCheckoutService) ResumeCheckout(ctx context.Context, tenantID, subscriptionID uuid.UUID, in SubscriptionCheckoutInput) (*SubscriptionCheckoutResult, error) {
-	if err := validateRedirectURL(in.SuccessURL, s.cfg); err != nil {
+	successURL, err := resolveCheckoutSuccessURL(in.SuccessURL, s.cfg)
+	if err != nil {
 		return nil, err
 	}
+	in.SuccessURL = successURL
 	if in.CancelURL != "" {
 		if err := validateRedirectURL(in.CancelURL, s.cfg); err != nil {
 			return nil, err
@@ -343,9 +347,11 @@ func (s *SubscriptionCheckoutService) StartCardCapture(
 	tenantID, subscriptionID uuid.UUID,
 	in CardCaptureInput,
 ) (*CardCaptureResult, error) {
-	if err := validateRedirectURL(in.SuccessURL, s.cfg); err != nil {
+	successURL, err := resolveCheckoutSuccessURL(in.SuccessURL, s.cfg)
+	if err != nil {
 		return nil, err
 	}
+	in.SuccessURL = successURL
 	if in.CancelURL != "" {
 		if err := validateRedirectURL(in.CancelURL, s.cfg); err != nil {
 			return nil, err

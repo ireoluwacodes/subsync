@@ -1,40 +1,60 @@
 {{define "content"}}
 <div class="card">
+  <span class="eyebrow">Your plan</span>
   <h1>{{.PlanName}}</h1>
-  <p class="muted">{{.TenantName}} · {{.CustomerEmail}}</p>
-  <p><span class="badge {{if eq .State "active"}}ok{{else if eq .State "past_due"}}warn{{end}}">{{.State}}</span></p>
+  <p class="muted">{{.CustomerEmail}}</p>
+
+  <div class="status-row">
+    <span class="badge {{if or (eq .State "active") (eq .State "trialing")}}ok{{else if or (eq .State "past_due") (eq .State "incomplete")}}warn{{else if eq .State "canceled"}}danger{{end}}">{{.State}}</span>
+    {{if .CancelAtPeriodEnd}}<span class="badge warn">Cancels at period end</span>{{end}}
+  </div>
 
   {{if .AwaitingPaymentMethod}}
-  <p style="margin-top:1rem;"><strong>Action required:</strong> add a payment method before your next renewal.</p>
+  <div class="callout">
+    <strong>Action required.</strong> Add a payment method before your next renewal so your subscription stays active.
+  </div>
   {{end}}
 
-  {{if .HasCard}}
-  <p class="muted" style="margin-top:.75rem;">Card on file: {{.PaymentMethodBrand}} •••• {{.PaymentMethodLast4}}</p>
-  {{end}}
-
-  {{if .HasMandate}}
-  <p class="muted">Direct debit: <span class="badge {{if eq .MandateStatus "ready"}}ok{{else}}warn{{end}}">{{.MandateStatus}}</span></p>
+  {{if or .HasCard .HasMandate}}
+  <div class="detail-grid">
+    {{if .HasCard}}
+    <div class="detail">
+      <span>Card</span>
+      <span>{{.PaymentMethodBrand}} ···· {{.PaymentMethodLast4}}</span>
+    </div>
+    {{end}}
+    {{if .HasMandate}}
+    <div class="detail">
+      <span>Direct debit</span>
+      <span>{{.MandateStatus}}</span>
+    </div>
+    {{end}}
+  </div>
   {{end}}
 </div>
 
 <div class="card">
-  <h2 style="font-size:1.05rem;margin:0 0 .5rem;">Payment methods</h2>
+  <div class="section-label">Payment methods</div>
+  <h2>Manage how you pay</h2>
+  <p class="lead">Add a card for renewals, or set up direct debit as an optional fallback if card payment fails.</p>
   <div class="actions">
     <a class="btn btn-primary" href="/portal/{{.Token}}/add-card">Add or update card</a>
     {{if .CanSetupDirectDebit}}
-    <a class="btn btn-secondary" href="/portal/{{.Token}}/direct-debit">Set up direct debit (optional fallback)</a>
+    <a class="btn btn-secondary" href="/portal/{{.Token}}/direct-debit">Set up direct debit fallback</a>
     {{end}}
     {{if and .HasMandate (eq .MandateStatus "pending")}}
-    <a class="btn btn-secondary" href="/portal/{{.Token}}/direct-debit/pending">View mandate instructions</a>
+    <a class="btn btn-secondary" href="/portal/{{.Token}}/direct-debit/pending">Complete mandate validation</a>
     {{end}}
   </div>
 </div>
 
 {{if ne .State "canceled"}}
 <div class="card">
-  <h2 style="font-size:1.05rem;margin:0 0 .5rem;">Cancel subscription</h2>
+  <div class="section-label">Subscription</div>
+  <h2>Cancel subscription</h2>
+  <p class="lead">You can cancel anytime. Access continues until the end of your current billing period unless you choose immediate cancellation.</p>
   <form method="POST" action="/portal/{{.Token}}/cancel" onsubmit="return confirm('Cancel this subscription?');">
-    <button type="submit" class="btn btn-danger" style="width:100%;">Cancel subscription</button>
+    <button type="submit" class="btn btn-danger">Cancel subscription</button>
   </form>
 </div>
 {{end}}

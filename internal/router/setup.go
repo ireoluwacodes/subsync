@@ -34,6 +34,7 @@ func Setup(cfg *config.Config, database *db.DB, q *queue.Queue, repos *db.Repos,
 		PaymentMethodHandler: handlers.NewPaymentMethodHandler(svcs.PaymentMethods),
 		WebhookHandler:       handlers.NewWebhookHandler(svcs.Webhooks),
 		PortalHandler:        handlers.NewPortalHandler(svcs.Portal, portalRenderer),
+		BillingReturnHandler: handlers.NewBillingReturnHandler(svcs.BillingReturn, portalRenderer),
 		AnalyticsHandler:     handlers.NewAnalyticsHandler(svcs.Analytics),
 		NombaWebhookHandler:  handlers.NewNombaWebhookHandler(cfg, svcs.Tenants, svcs.NombaEvents),
 	}

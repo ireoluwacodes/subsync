@@ -26,6 +26,7 @@ type Services struct {
 	NombaEvents    *NombaEventService
 	Analytics      *AnalyticsService
 	Checkout       *SubscriptionCheckoutService
+	BillingReturn  *BillingReturnService
 }
 
 func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client, jwt *auth.JWTService, q *queue.Queue) *Services {
@@ -69,5 +70,6 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 		NombaEvents:    nombaEvents,
 		Analytics:      NewAnalyticsService(repos.Analytics, clk),
 		Checkout:       checkout,
+		BillingReturn:  NewBillingReturnService(cfg, repos, nombaClient),
 	}
 }

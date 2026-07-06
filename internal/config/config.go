@@ -149,6 +149,15 @@ func (c *Config) IsDevelopment() bool {
 	return strings.EqualFold(c.AppEnv, "development")
 }
 
+// DefaultCheckoutSuccessURL is the hosted return page used when integrators omit success_url.
+func (c *Config) DefaultCheckoutSuccessURL() string {
+	base := strings.TrimRight(c.PublicBaseURL, "/")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	return base + "/billing/success"
+}
+
 func (c *Config) DevEncryptionKey() string {
 	if c.NombaCredentialsEncryptionKey != "" {
 		return c.NombaCredentialsEncryptionKey
