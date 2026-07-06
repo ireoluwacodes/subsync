@@ -202,9 +202,7 @@ func SubscriptionConfirmedHTML(tenantName string, amount int64, currency, portal
 			colorText, tenant, amountLine(amount, currency),
 		)
 	}
-	body := paymentLine + fmt.Sprintf(
-		`<p style="margin:16px 0 0;">You can optionally set up direct debit as a renewal fallback, or add a card for automatic billing — both from your billing portal.</p>`,
-	)
+	body := paymentLine + `<p style="margin:16px 0 0;">You can optionally set up direct debit as a renewal fallback, or add a card for automatic billing — both from your billing portal.</p>`
 	opts := layoutOpts{
 		eyebrow: "Payment confirmed",
 		heading: "Thank you",
