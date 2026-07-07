@@ -47,6 +47,10 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 	subs.SetPaymentMethods(repos.PaymentMethods)
 	paymentMethods := NewPaymentMethodService(repos.PaymentMethods, repos.Customers, webhooks)
 
+	customers := NewCustomerService(repos.Customers)
+	customers.SetSubscriptions(repos.Subscriptions)
+	customers.SetPaymentMethods(repos.PaymentMethods)
+
 	tenants := NewTenantService(repos.Tenants, nombaClient)
 	billing := NewBillingService(cfg, clk, repos, invoices, subs, mailer, publisher, webhooks)
 	billing.SetPaymentMethods(paymentMethods)
@@ -63,7 +67,7 @@ func NewServices(repos *db.Repos, cfg *config.Config, nombaClient *nomba.Client,
 		Auth:           NewAuthService(repos.Users, repos.Tenants, repos.PasswordResets, jwt, nombaClient, tenants, cfg.PublicBaseURL, mailer, cfg),
 		Settings:       NewSettingsService(repos.Tenants, nombaClient, cfg.PublicBaseURL),
 		Plans:          NewPlanService(repos.Plans),
-		Customers:      NewCustomerService(repos.Customers),
+		Customers:      customers,
 		PaymentMethods: paymentMethods,
 		Invoices:       invoices,
 		Subscriptions:  subs,

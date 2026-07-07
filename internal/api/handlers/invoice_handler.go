@@ -69,13 +69,13 @@ func (h *InvoiceHandler) Get(c *gin.Context) {
 		dto.RespondError(c, err)
 		return
 	}
-	inv, items, err := h.svc.Get(c.Request.Context(), tenant.ID, id)
+	rel, items, err := h.svc.GetWithRelations(c.Request.Context(), tenant.ID, id)
 	if err != nil {
 		dto.RespondError(c, err)
 		return
 	}
 	dto.RespondOK(c, gin.H{
-		"invoice":    dto.InvoiceToResponse(inv),
+		"invoice":    dto.InvoiceToResponseWithRelations(rel.Invoice, rel.Subscription, rel.Customer),
 		"line_items": items,
 	})
 }

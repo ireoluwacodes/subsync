@@ -76,13 +76,13 @@ func (h *CustomerHandler) Get(c *gin.Context) {
 		return
 	}
 
-	customer, err := h.svc.Get(c.Request.Context(), tenant.ID, id)
+	rel, err := h.svc.GetWithRelations(c.Request.Context(), tenant.ID, id)
 	if err != nil {
 		dto.RespondError(c, err)
 		return
 	}
 
-	dto.RespondOK(c, dto.CustomerToResponse(customer))
+	dto.RespondOK(c, dto.CustomerToResponseWithRelations(rel.Customer, rel.Subscriptions, rel.PaymentMethods))
 }
 
 func (h *CustomerHandler) Update(c *gin.Context) {

@@ -52,6 +52,27 @@ func (s *InvoiceService) Get(ctx context.Context, tenantID, id uuid.UUID) (*doma
 	return inv, items, nil
 }
 
+// GetWithRelations returns a single invoice (with its line items) along with its
+// related subscription and customer objects populated when available.
+func (s *InvoiceService) GetWithRelations(ctx context.Context, tenantID, id uuid.UUID) (*InvoiceWithRelations, []*domain.InvoiceLineItem, error) {
+	inv, items, err := s.Get(ctx, tenantID, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	rel := &InvoiceWithRelations{Invoice: inv}
+	if s.subscriptions != nil && inv.SubscriptionID != uuid.Nil {
+		if sub, err := s.subscriptions.GetByID(ctx, tenantID, inv.SubscriptionID); err == nil {
+			rel.Subscription = sub
+		}
+	}
+	if s.customers != nil && inv.CustomerID != uuid.Nil {
+		if cust, err := s.customers.GetByID(ctx, tenantID, inv.CustomerID); err == nil {
+			rel.Customer = cust
+		}
+	}
+	return rel, items, nil
+}
+
 func (s *InvoiceService) List(ctx context.Context, tenantID uuid.UUID, filter domain.InvoiceListFilter) ([]*domain.Invoice, int64, error) {
 	return s.repo.List(ctx, tenantID, filter)
 }

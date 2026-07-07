@@ -284,6 +284,9 @@ type CustomerResponse struct {
 	Metadata   map[string]any `json:"metadata"`
 	CreatedAt  string         `json:"created_at"`
 	UpdatedAt  string         `json:"updated_at"`
+
+	Subscriptions  []SubscriptionResponse `json:"subscriptions,omitempty"`
+	PaymentMethods []PaymentMethodBrief   `json:"payment_methods,omitempty"`
 }
 
 func CustomerToResponse(c *domain.Customer) CustomerResponse {
@@ -298,6 +301,25 @@ func CustomerToResponse(c *domain.Customer) CustomerResponse {
 		CreatedAt:  c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:  c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
+}
+
+// CustomerToResponseWithRelations builds a customer response with nested
+// subscriptions and payment methods when they are available.
+func CustomerToResponseWithRelations(c *domain.Customer, subs []*domain.Subscription, pms []*domain.PaymentMethod) CustomerResponse {
+	resp := CustomerToResponse(c)
+	if len(subs) > 0 {
+		resp.Subscriptions = make([]SubscriptionResponse, len(subs))
+		for i, sub := range subs {
+			resp.Subscriptions[i] = SubscriptionToResponse(sub)
+		}
+	}
+	if len(pms) > 0 {
+		resp.PaymentMethods = make([]PaymentMethodBrief, len(pms))
+		for i, pm := range pms {
+			resp.PaymentMethods[i] = PaymentMethodToBrief(pm)
+		}
+	}
+	return resp
 }
 
 func CustomersToResponse(customers []*domain.Customer) []CustomerResponse {
