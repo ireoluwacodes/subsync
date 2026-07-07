@@ -75,7 +75,7 @@ func (r *InvoiceRepo) Update(ctx context.Context, invoice *domain.Invoice) error
 	if err != nil {
 		return err
 	}
-	res := r.db.WithContext(ctx).Model(&models.Invoice{}).Where("id = ? AND tenant_id = ?", invoice.ID, invoice.TenantID).Save(m)
+	res := r.db.WithContext(ctx).Model(&models.Invoice{}).Where("id = ? AND tenant_id = ?", invoice.ID, invoice.TenantID).Omit("CreatedAt").Save(m)
 	if res.Error != nil {
 		return MapGORMError(res.Error)
 	}

@@ -139,7 +139,7 @@ func (r *TenantRepo) Update(ctx context.Context, tenant *domain.Tenant) error {
 	if err != nil {
 		return err
 	}
-	if err := r.db.WithContext(ctx).Save(m).Error; err != nil {
+	if err := r.db.WithContext(ctx).Omit("CreatedAt").Save(m).Error; err != nil {
 		return MapGORMError(err)
 	}
 	*tenant = *models.TenantToDomain(m)

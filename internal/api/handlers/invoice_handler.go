@@ -44,14 +44,14 @@ func (h *InvoiceHandler) List(c *gin.Context) {
 		}
 	}
 
-	invoices, total, err := h.svc.List(c.Request.Context(), tenant.ID, filter)
+	invoices, total, err := h.svc.ListWithRelations(c.Request.Context(), tenant.ID, filter)
 	if err != nil {
 		dto.RespondError(c, err)
 		return
 	}
 	out := make([]dto.InvoiceResponse, len(invoices))
-	for i, inv := range invoices {
-		out[i] = dto.InvoiceToResponse(inv)
+	for i, item := range invoices {
+		out[i] = dto.InvoiceToResponseWithRelations(item.Invoice, item.Subscription, item.Customer)
 	}
 	c.JSON(200, dto.Envelope{
 		Data: out,

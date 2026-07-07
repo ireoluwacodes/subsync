@@ -88,7 +88,7 @@ func (r *SubscriptionRepo) Update(ctx context.Context, sub *domain.Subscription)
 	if err != nil {
 		return err
 	}
-	res := r.db.WithContext(ctx).Model(&models.Subscription{}).Where("id = ? AND tenant_id = ?", sub.ID, sub.TenantID).Save(m)
+	res := r.db.WithContext(ctx).Model(&models.Subscription{}).Where("id = ? AND tenant_id = ?", sub.ID, sub.TenantID).Omit("CreatedAt").Save(m)
 	if res.Error != nil {
 		return MapGORMError(res.Error)
 	}

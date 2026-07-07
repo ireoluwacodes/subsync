@@ -19,6 +19,9 @@ type InvoiceResponse struct {
 	AmountPaidDisplay string `json:"amount_paid_display"`
 	Currency         string `json:"currency"`
 	CreatedAt        string `json:"created_at"`
+
+	Subscription *SubscriptionResponse `json:"subscription,omitempty"`
+	Customer     *CustomerResponse     `json:"customer,omitempty"`
 }
 
 func InvoiceToResponse(inv *domain.Invoice) InvoiceResponse {
@@ -35,6 +38,21 @@ func InvoiceToResponse(inv *domain.Invoice) InvoiceResponse {
 		Currency:          inv.Currency,
 		CreatedAt:         inv.CreatedAt.Format(time.RFC3339),
 	}
+}
+
+// InvoiceToResponseWithRelations builds an invoice response with nested
+// subscription and customer objects when they are available.
+func InvoiceToResponseWithRelations(inv *domain.Invoice, sub *domain.Subscription, customer *domain.Customer) InvoiceResponse {
+	resp := InvoiceToResponse(inv)
+	if sub != nil {
+		s := SubscriptionToResponse(sub)
+		resp.Subscription = &s
+	}
+	if customer != nil {
+		c := CustomerToResponse(customer)
+		resp.Customer = &c
+	}
+	return resp
 }
 
 type PlanResponse struct {

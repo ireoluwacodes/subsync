@@ -92,14 +92,14 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 		}
 	}
 
-	subs, total, err := h.svc.List(c.Request.Context(), tenant.ID, filter)
+	subs, total, err := h.svc.ListWithRelations(c.Request.Context(), tenant.ID, filter)
 	if err != nil {
 		dto.RespondError(c, err)
 		return
 	}
 	out := make([]dto.SubscriptionResponse, len(subs))
-	for i, s := range subs {
-		out[i] = dto.SubscriptionToResponse(s)
+	for i, item := range subs {
+		out[i] = dto.SubscriptionToResponseWithRelations(item.Subscription, item.Customer, item.Plan, item.PaymentMethod, item.FallbackPaymentMethod)
 	}
 	c.JSON(200, dto.Envelope{
 		Data: out,
@@ -287,7 +287,7 @@ func (h *SubscriptionHandler) ListForCustomer(c *gin.Context) {
 		return
 	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
-	subs, _, err := h.svc.List(c.Request.Context(), tenant.ID, domain.SubscriptionListFilter{
+	subs, _, err := h.svc.ListWithRelations(c.Request.Context(), tenant.ID, domain.SubscriptionListFilter{
 		CustomerID: &customerID,
 		Limit:      limit,
 	})
@@ -296,8 +296,8 @@ func (h *SubscriptionHandler) ListForCustomer(c *gin.Context) {
 		return
 	}
 	out := make([]dto.SubscriptionResponse, len(subs))
-	for i, s := range subs {
-		out[i] = dto.SubscriptionToResponse(s)
+	for i, item := range subs {
+		out[i] = dto.SubscriptionToResponseWithRelations(item.Subscription, item.Customer, item.Plan, item.PaymentMethod, item.FallbackPaymentMethod)
 	}
 	dto.RespondOK(c, out)
 }

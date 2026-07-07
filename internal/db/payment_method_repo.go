@@ -30,7 +30,7 @@ func (r *PaymentMethodRepo) Create(ctx context.Context, pm *domain.PaymentMethod
 
 func (r *PaymentMethodRepo) Update(ctx context.Context, pm *domain.PaymentMethod) error {
 	m := models.PaymentMethodFromDomain(pm)
-	if err := r.db.WithContext(ctx).Save(m).Error; err != nil {
+	if err := r.db.WithContext(ctx).Omit("CreatedAt").Save(m).Error; err != nil {
 		return MapGORMError(err)
 	}
 	*pm = *models.PaymentMethodToDomain(m)

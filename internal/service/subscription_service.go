@@ -13,14 +13,24 @@ import (
 )
 
 type SubscriptionService struct {
-	repo      domain.SubscriptionRepository
-	plans     domain.PlanRepository
-	customers domain.CustomerRepository
-	tenants   domain.TenantRepository
-	invoices  *InvoiceService
-	webhooks  *WebhookService
-	billing   *BillingService
-	mailer    *email.MailerService
+	repo           domain.SubscriptionRepository
+	plans          domain.PlanRepository
+	customers      domain.CustomerRepository
+	paymentMethods domain.PaymentMethodRepository
+	tenants        domain.TenantRepository
+	invoices       *InvoiceService
+	webhooks       *WebhookService
+	billing        *BillingService
+	mailer         *email.MailerService
+}
+
+// SubscriptionWithRelations bundles a subscription with its related records.
+type SubscriptionWithRelations struct {
+	Subscription          *domain.Subscription
+	Customer              *domain.Customer
+	Plan                  *domain.Plan
+	PaymentMethod         *domain.PaymentMethod
+	FallbackPaymentMethod *domain.PaymentMethod
 }
 
 func NewSubscriptionService(
@@ -40,6 +50,10 @@ func (s *SubscriptionService) SetBilling(billing *BillingService) {
 func (s *SubscriptionService) SetNotifications(tenants domain.TenantRepository, mailer *email.MailerService) {
 	s.tenants = tenants
 	s.mailer = mailer
+}
+
+func (s *SubscriptionService) SetPaymentMethods(paymentMethods domain.PaymentMethodRepository) {
+	s.paymentMethods = paymentMethods
 }
 
 type CreateSubscriptionInput struct {
@@ -187,6 +201,80 @@ func (s *SubscriptionService) Get(ctx context.Context, tenantID, id uuid.UUID) (
 
 func (s *SubscriptionService) List(ctx context.Context, tenantID uuid.UUID, filter domain.SubscriptionListFilter) ([]*domain.Subscription, int64, error) {
 	return s.repo.List(ctx, tenantID, filter)
+}
+
+// ListWithRelations returns subscriptions with their related customer, plan, and
+// payment method objects populated. Related records are fetched once per unique
+// ID to avoid N+1 lookups.
+func (s *SubscriptionService) ListWithRelations(ctx context.Context, tenantID uuid.UUID, filter domain.SubscriptionListFilter) ([]SubscriptionWithRelations, int64, error) {
+	subs, total, err := s.repo.List(ctx, tenantID, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	customers := make(map[uuid.UUID]*domain.Customer)
+	plans := make(map[uuid.UUID]*domain.Plan)
+	paymentMethods := make(map[uuid.UUID]*domain.PaymentMethod)
+
+	for _, sub := range subs {
+		if s.customers != nil && sub.CustomerID != uuid.Nil {
+			if _, seen := customers[sub.CustomerID]; !seen {
+				cust, err := s.customers.GetByID(ctx, tenantID, sub.CustomerID)
+				if err == nil {
+					customers[sub.CustomerID] = cust
+				} else {
+					customers[sub.CustomerID] = nil
+				}
+			}
+		}
+		if s.plans != nil && sub.PlanID != uuid.Nil {
+			if _, seen := plans[sub.PlanID]; !seen {
+				plan, err := s.plans.GetByID(ctx, tenantID, sub.PlanID)
+				if err == nil {
+					plans[sub.PlanID] = plan
+				} else {
+					plans[sub.PlanID] = nil
+				}
+			}
+		}
+		if s.paymentMethods != nil && sub.PaymentMethodID != nil && *sub.PaymentMethodID != uuid.Nil {
+			if _, seen := paymentMethods[*sub.PaymentMethodID]; !seen {
+				pm, err := s.paymentMethods.GetByID(ctx, tenantID, *sub.PaymentMethodID)
+				if err == nil {
+					paymentMethods[*sub.PaymentMethodID] = pm
+				} else {
+					paymentMethods[*sub.PaymentMethodID] = nil
+				}
+			}
+		}
+		if s.paymentMethods != nil && sub.FallbackPaymentMethodID != nil && *sub.FallbackPaymentMethodID != uuid.Nil {
+			if _, seen := paymentMethods[*sub.FallbackPaymentMethodID]; !seen {
+				pm, err := s.paymentMethods.GetByID(ctx, tenantID, *sub.FallbackPaymentMethodID)
+				if err == nil {
+					paymentMethods[*sub.FallbackPaymentMethodID] = pm
+				} else {
+					paymentMethods[*sub.FallbackPaymentMethodID] = nil
+				}
+			}
+		}
+	}
+
+	out := make([]SubscriptionWithRelations, len(subs))
+	for i, sub := range subs {
+		item := SubscriptionWithRelations{
+			Subscription: sub,
+			Customer:     customers[sub.CustomerID],
+			Plan:         plans[sub.PlanID],
+		}
+		if sub.PaymentMethodID != nil {
+			item.PaymentMethod = paymentMethods[*sub.PaymentMethodID]
+		}
+		if sub.FallbackPaymentMethodID != nil {
+			item.FallbackPaymentMethod = paymentMethods[*sub.FallbackPaymentMethodID]
+		}
+		out[i] = item
+	}
+	return out, total, nil
 }
 
 type CancelInput struct {

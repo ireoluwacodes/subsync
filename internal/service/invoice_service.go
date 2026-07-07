@@ -16,13 +16,21 @@ import (
 )
 
 type InvoiceService struct {
-	repo      domain.InvoiceRepository
-	customers domain.CustomerRepository
-	cfg       *config.Config
-	pdf       *pdf.Renderer
-	nomba     *nomba.Client
-	clock     clock.Clock
-	webhooks  *WebhookService
+	repo          domain.InvoiceRepository
+	customers     domain.CustomerRepository
+	subscriptions domain.SubscriptionRepository
+	cfg           *config.Config
+	pdf           *pdf.Renderer
+	nomba         *nomba.Client
+	clock         clock.Clock
+	webhooks      *WebhookService
+}
+
+// InvoiceWithRelations bundles an invoice with its related subscription and customer.
+type InvoiceWithRelations struct {
+	Invoice      *domain.Invoice
+	Subscription *domain.Subscription
+	Customer     *domain.Customer
 }
 
 func NewInvoiceService(repo domain.InvoiceRepository, customers domain.CustomerRepository, cfg *config.Config, nombaClient *nomba.Client, clk clock.Clock, webhooks *WebhookService) *InvoiceService {
@@ -46,6 +54,51 @@ func (s *InvoiceService) Get(ctx context.Context, tenantID, id uuid.UUID) (*doma
 
 func (s *InvoiceService) List(ctx context.Context, tenantID uuid.UUID, filter domain.InvoiceListFilter) ([]*domain.Invoice, int64, error) {
 	return s.repo.List(ctx, tenantID, filter)
+}
+
+// ListWithRelations returns invoices with their related subscription and customer
+// objects populated. Related records are fetched once per unique ID to avoid N+1 lookups.
+func (s *InvoiceService) ListWithRelations(ctx context.Context, tenantID uuid.UUID, filter domain.InvoiceListFilter) ([]InvoiceWithRelations, int64, error) {
+	invoices, total, err := s.repo.List(ctx, tenantID, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	subs := make(map[uuid.UUID]*domain.Subscription)
+	customers := make(map[uuid.UUID]*domain.Customer)
+
+	for _, inv := range invoices {
+		if s.subscriptions != nil && inv.SubscriptionID != uuid.Nil {
+			if _, seen := subs[inv.SubscriptionID]; !seen {
+				sub, err := s.subscriptions.GetByID(ctx, tenantID, inv.SubscriptionID)
+				if err == nil {
+					subs[inv.SubscriptionID] = sub
+				} else {
+					subs[inv.SubscriptionID] = nil
+				}
+			}
+		}
+		if s.customers != nil && inv.CustomerID != uuid.Nil {
+			if _, seen := customers[inv.CustomerID]; !seen {
+				cust, err := s.customers.GetByID(ctx, tenantID, inv.CustomerID)
+				if err == nil {
+					customers[inv.CustomerID] = cust
+				} else {
+					customers[inv.CustomerID] = nil
+				}
+			}
+		}
+	}
+
+	out := make([]InvoiceWithRelations, len(invoices))
+	for i, inv := range invoices {
+		out[i] = InvoiceWithRelations{
+			Invoice:      inv,
+			Subscription: subs[inv.SubscriptionID],
+			Customer:     customers[inv.CustomerID],
+		}
+	}
+	return out, total, nil
 }
 
 func (s *InvoiceService) CreateSubscriptionInvoice(ctx context.Context, tenantID uuid.UUID, sub *domain.Subscription, plan *domain.Plan) (*domain.Invoice, error) {
@@ -314,6 +367,10 @@ func (s *InvoiceService) CustomerPaidTotal(ctx context.Context, tenantID, custom
 
 func (s *InvoiceService) SetWebhooks(webhooks *WebhookService) {
 	s.webhooks = webhooks
+}
+
+func (s *InvoiceService) SetSubscriptions(subs domain.SubscriptionRepository) {
+	s.subscriptions = subs
 }
 
 func billingCallbackURL(cfg *config.Config) string {

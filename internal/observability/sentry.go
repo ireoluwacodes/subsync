@@ -33,6 +33,28 @@ func InitSentry(cfg *config.Config) (func(), error) {
 	}, nil
 }
 
+// CaptureJobError reports a background (asynq) job failure to Sentry.
+func CaptureJobError(taskType string, err error, extras map[string]any) {
+	if !sentryEnabled || err == nil {
+		return
+	}
+
+	sentry.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelError)
+		scope.SetTag("error.source", "worker_job")
+		scope.SetTag("job.task", taskType)
+		if len(extras) > 0 {
+			ctx := make(sentry.Context, len(extras))
+			for key, value := range extras {
+				ctx[key] = value
+			}
+			scope.SetContext("worker_job", ctx)
+		}
+		scope.SetFingerprint([]string{"worker-job", taskType})
+		sentry.CaptureException(err)
+	})
+}
+
 // CaptureExternalAPIError reports outbound HTTP/SDK failures to Sentry.
 func CaptureExternalAPIError(provider, operation string, err error, extras map[string]any) {
 	if !sentryEnabled || err == nil {

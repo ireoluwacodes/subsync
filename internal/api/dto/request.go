@@ -200,17 +200,23 @@ func UserToResponse(u *domain.User) UserResponse {
 }
 
 type SubscriptionResponse struct {
-	ID                 string  `json:"id"`
-	TenantID           string  `json:"tenant_id"`
-	CustomerID         string  `json:"customer_id"`
-	PlanID             string  `json:"plan_id"`
-	PaymentMethodID    *string `json:"payment_method_id,omitempty"`
-	State              string  `json:"state"`
-	CurrentPeriodStart string  `json:"current_period_start"`
-	CurrentPeriodEnd   string  `json:"current_period_end"`
-	CancelAtPeriodEnd  bool    `json:"cancel_at_period_end"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ID                      string  `json:"id"`
+	TenantID                string  `json:"tenant_id"`
+	CustomerID              string  `json:"customer_id"`
+	PlanID                  string  `json:"plan_id"`
+	PaymentMethodID         *string `json:"payment_method_id,omitempty"`
+	FallbackPaymentMethodID *string `json:"fallback_payment_method_id,omitempty"`
+	State                   string  `json:"state"`
+	CurrentPeriodStart      string  `json:"current_period_start"`
+	CurrentPeriodEnd        string  `json:"current_period_end"`
+	CancelAtPeriodEnd       bool    `json:"cancel_at_period_end"`
+	CreatedAt               string  `json:"created_at"`
+	UpdatedAt               string  `json:"updated_at"`
+
+	Customer              *CustomerResponse   `json:"customer,omitempty"`
+	Plan                  *PlanResponse       `json:"plan,omitempty"`
+	PaymentMethod         *PaymentMethodBrief `json:"payment_method,omitempty"`
+	FallbackPaymentMethod *PaymentMethodBrief `json:"fallback_payment_method,omitempty"`
 }
 
 func SubscriptionToResponse(s *domain.Subscription) SubscriptionResponse {
@@ -229,6 +235,33 @@ func SubscriptionToResponse(s *domain.Subscription) SubscriptionResponse {
 	if s.PaymentMethodID != nil {
 		id := s.PaymentMethodID.String()
 		resp.PaymentMethodID = &id
+	}
+	if s.FallbackPaymentMethodID != nil {
+		id := s.FallbackPaymentMethodID.String()
+		resp.FallbackPaymentMethodID = &id
+	}
+	return resp
+}
+
+// SubscriptionToResponseWithRelations builds a subscription response with nested
+// customer, plan, and payment method objects when they are available.
+func SubscriptionToResponseWithRelations(s *domain.Subscription, customer *domain.Customer, plan *domain.Plan, pm, fallbackPM *domain.PaymentMethod) SubscriptionResponse {
+	resp := SubscriptionToResponse(s)
+	if customer != nil {
+		c := CustomerToResponse(customer)
+		resp.Customer = &c
+	}
+	if plan != nil {
+		p := PlanToResponse(plan)
+		resp.Plan = &p
+	}
+	if pm != nil {
+		m := PaymentMethodToBrief(pm)
+		resp.PaymentMethod = &m
+	}
+	if fallbackPM != nil {
+		m := PaymentMethodToBrief(fallbackPM)
+		resp.FallbackPaymentMethod = &m
 	}
 	return resp
 }
@@ -304,6 +337,38 @@ func PaymentMethodToResponse(pm *domain.PaymentMethod) PaymentMethodResponse {
 		IsDefault:  pm.IsDefault,
 		CreatedAt:  pm.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:  pm.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
+// PaymentMethodBrief is a non-sensitive payment method view for embedding in
+// other responses. It omits token_key and mandate_id.
+type PaymentMethodBrief struct {
+	ID            string                   `json:"id"`
+	TenantID      string                   `json:"tenant_id"`
+	CustomerID    string                   `json:"customer_id"`
+	Type          domain.PaymentMethodType `json:"type"`
+	MandateStatus domain.MandateStatus     `json:"mandate_status,omitempty"`
+	CardLast4     string                   `json:"card_last4,omitempty"`
+	CardBrand     string                   `json:"card_brand,omitempty"`
+	CardExpiry    string                   `json:"card_expiry,omitempty"`
+	IsDefault     bool                     `json:"is_default"`
+	CreatedAt     string                   `json:"created_at"`
+	UpdatedAt     string                   `json:"updated_at"`
+}
+
+func PaymentMethodToBrief(pm *domain.PaymentMethod) PaymentMethodBrief {
+	return PaymentMethodBrief{
+		ID:            pm.ID.String(),
+		TenantID:      pm.TenantID.String(),
+		CustomerID:    pm.CustomerID.String(),
+		Type:          pm.Type,
+		MandateStatus: pm.MandateStatus,
+		CardLast4:     pm.CardLast4,
+		CardBrand:     pm.CardBrand,
+		CardExpiry:    pm.CardExpiry,
+		IsDefault:     pm.IsDefault,
+		CreatedAt:     pm.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     pm.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 

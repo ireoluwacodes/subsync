@@ -68,6 +68,12 @@ func TenantFromDomain(t *domain.Tenant, clientSecretEnc, webhookSecretEnc string
 	if t.ID != uuid.Nil {
 		m.ID = t.ID
 	}
+	if !t.CreatedAt.IsZero() {
+		m.CreatedAt = t.CreatedAt
+	}
+	if !t.UpdatedAt.IsZero() {
+		m.UpdatedAt = t.UpdatedAt
+	}
 	return m, nil
 }
 
@@ -150,6 +156,12 @@ func SubscriptionFromDomain(s *domain.Subscription) (*Subscription, error) {
 	}
 	if s.ID != uuid.Nil {
 		m.ID = s.ID
+	}
+	if !s.CreatedAt.IsZero() {
+		m.CreatedAt = s.CreatedAt
+	}
+	if !s.UpdatedAt.IsZero() {
+		m.UpdatedAt = s.UpdatedAt
 	}
 	return m, nil
 }
@@ -251,6 +263,12 @@ func InvoiceFromDomain(inv *domain.Invoice) (*Invoice, error) {
 	}
 	if inv.ID != uuid.Nil {
 		m.ID = inv.ID
+	}
+	if !inv.CreatedAt.IsZero() {
+		m.CreatedAt = inv.CreatedAt
+	}
+	if !inv.UpdatedAt.IsZero() {
+		m.UpdatedAt = inv.UpdatedAt
 	}
 	return m, nil
 }
@@ -451,6 +469,12 @@ func PaymentMethodFromDomain(pm *domain.PaymentMethod) *PaymentMethod {
 	}
 	if pm.ID != uuid.Nil {
 		m.ID = pm.ID
+	}
+	if !pm.CreatedAt.IsZero() {
+		m.CreatedAt = pm.CreatedAt
+	}
+	if !pm.UpdatedAt.IsZero() {
+		m.UpdatedAt = pm.UpdatedAt
 	}
 	return m
 }
