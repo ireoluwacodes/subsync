@@ -19,17 +19,17 @@ type brandTheme struct {
 
 func themeFromTenant(t *domain.Tenant) brandTheme {
 	theme := brandTheme{
-		CompanyName: t.Name,
-		AccentR:     19,
-		AccentG:     78,
-		AccentB:     74,
-		MutedR:      113,
-		MutedG:        113,
-		MutedB:        122,
+		AccentR: 19,
+		AccentG: 78,
+		AccentB: 74,
+		MutedR:  113,
+		MutedG:  113,
+		MutedB:  122,
 	}
 	if t == nil {
 		return theme
 	}
+	theme.CompanyName = t.Name
 	if name := brandingString(t.Branding, "company_name"); name != "" {
 		theme.CompanyName = name
 	}

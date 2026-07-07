@@ -239,5 +239,3 @@ func wantsJSON(c *gin.Context) bool {
 	accept := c.GetHeader("Accept")
 	return strings.Contains(accept, "application/json")
 }
-
-func boolPtr(v bool) *bool { return &v }
