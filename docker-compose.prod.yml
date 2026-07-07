@@ -10,7 +10,7 @@ services:
       retries: 5
 
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY}-api:latest
+    image: ghcr.io/ireoluwacodes/subsync-api:latest
     container_name: subsync-api
     restart: always
     expose:
@@ -34,7 +34,7 @@ services:
         max-file: "3"
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY}-worker:latest
+    image: ghcr.io/ireoluwacodes/subsync-worker:latest
     container_name: subsync-worker
     restart: always
     env_file:

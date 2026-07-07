@@ -2,6 +2,8 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	sentrygin "github.com/getsentry/sentry-go/gin"
+
 	"github.com/ireoluwacodes/subsync/internal/api/handlers"
 	"github.com/ireoluwacodes/subsync/internal/api/middleware"
 )
@@ -20,6 +22,9 @@ func SetupRouter(deps Dependencies) *gin.Engine {
 	r.RedirectTrailingSlash = false
 
 	r.Use(middleware.RequestID())
+	if deps.Config.SentryDSN != "" {
+		r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
+	}
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS(deps.Config.CORSAllowedOrigins))

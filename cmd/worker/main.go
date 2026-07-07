@@ -12,6 +12,7 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/jobs"
 	"github.com/ireoluwacodes/subsync/internal/logger"
+	"github.com/ireoluwacodes/subsync/internal/observability"
 	"github.com/ireoluwacodes/subsync/internal/queue"
 )
 
@@ -19,6 +20,13 @@ func main() {
 	cfg := config.MustLoad()
 	log := logger.MustInit(cfg.AppEnv, cfg.LogLevel)
 	defer logger.Sync(log)
+
+	flushSentry, err := observability.InitSentry(cfg)
+	if err != nil {
+		log.Error("failed to initialize sentry", zap.Error(err))
+		os.Exit(1)
+	}
+	defer flushSentry()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

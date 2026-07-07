@@ -18,6 +18,7 @@ import (
 	"github.com/ireoluwacodes/subsync/internal/db"
 	"github.com/ireoluwacodes/subsync/internal/logger"
 	"github.com/ireoluwacodes/subsync/internal/nomba"
+	"github.com/ireoluwacodes/subsync/internal/observability"
 	"github.com/ireoluwacodes/subsync/internal/queue"
 	"github.com/ireoluwacodes/subsync/internal/router"
 	"github.com/ireoluwacodes/subsync/internal/service"
@@ -27,6 +28,13 @@ func main() {
 	cfg := config.MustLoad()
 	log := logger.MustInit(cfg.AppEnv, cfg.LogLevel)
 	defer logger.Sync(log)
+
+	flushSentry, err := observability.InitSentry(cfg)
+	if err != nil {
+		log.Error("failed to initialize sentry", zap.Error(err))
+		os.Exit(1)
+	}
+	defer flushSentry()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

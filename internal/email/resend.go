@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 
+	"github.com/ireoluwacodes/subsync/internal/observability"
 	"github.com/resend/resend-go/v3"
 )
 
@@ -25,5 +26,11 @@ func (s *ResendStrategy) Send(ctx context.Context, req SendRequest) error {
 		params.Text = req.Text
 	}
 	_, err := s.client.Emails.SendWithContext(ctx, params)
+	if err != nil {
+		observability.CaptureExternalAPIError("resend", "send_email", err, map[string]any{
+			"email.to":      req.To,
+			"email.subject": req.Subject,
+		})
+	}
 	return err
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ireoluwacodes/subsync/internal/observability"
 	"github.com/ireoluwacodes/subsync/internal/utils"
 )
 
@@ -86,6 +87,11 @@ func (h *Handlers) deliverWebhook(ctx context.Context, tenantID, deliveryID uuid
 		delivery.LastError = err.Error()
 		delivery.NextRetryAt = utils.PtrTime(time.Now().UTC().Add(backoff(delivery.AttemptCount)))
 		_ = h.Repos.Webhooks.UpdateDelivery(ctx, delivery)
+		observability.CaptureExternalAPIError("merchant_webhook", delivery.EventType, err, map[string]any{
+			"webhook.url":        endpoint.URL,
+			"webhook.delivery_id": deliveryID.String(),
+			"tenant.id":          tenantID.String(),
+		})
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -104,7 +110,14 @@ func (h *Handlers) deliverWebhook(ctx context.Context, tenantID, deliveryID uuid
 	delivery.LastError = fmt.Sprintf("unexpected status %d", status)
 	delivery.NextRetryAt = utils.PtrTime(time.Now().UTC().Add(backoff(delivery.AttemptCount)))
 	_ = h.Repos.Webhooks.UpdateDelivery(ctx, delivery)
-	return fmt.Errorf("webhook delivery failed: status %d", status)
+	apiErr := fmt.Errorf("webhook delivery failed: status %d", status)
+	observability.CaptureExternalAPIError("merchant_webhook", delivery.EventType, apiErr, map[string]any{
+		"webhook.url":         endpoint.URL,
+		"webhook.delivery_id": deliveryID.String(),
+		"tenant.id":           tenantID.String(),
+		"http.status_code":    status,
+	})
+	return apiErr
 }
 
 func backoff(attempt int) time.Duration {

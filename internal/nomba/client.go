@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ireoluwacodes/subsync/internal/domain"
+	"github.com/ireoluwacodes/subsync/internal/observability"
 	"go.uber.org/zap"
 )
 
@@ -158,13 +159,17 @@ func (c *Client) roundTrip(ctx context.Context, baseURL, accountID, method, path
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("nomba request: %w", err)
+		apiErr := fmt.Errorf("nomba request: %w", err)
+		observability.CaptureExternalAPIError("nomba", method+" "+path, apiErr, nombaErrorExtras(method, path, 0, ""))
+		return apiErr
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("read response: %w", err)
+		apiErr := fmt.Errorf("read response: %w", err)
+		observability.CaptureExternalAPIError("nomba", method+" "+path, apiErr, nombaErrorExtras(method, path, resp.StatusCode, ""))
+		return apiErr
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -172,7 +177,9 @@ func (c *Client) roundTrip(ctx context.Context, baseURL, accountID, method, path
 			return nil
 		}
 		if err := json.Unmarshal(respBody, out); err != nil {
-			return fmt.Errorf("decode response: %w", err)
+			apiErr := fmt.Errorf("decode response: %w", err)
+			observability.CaptureExternalAPIError("nomba", method+" "+path, apiErr, nombaErrorExtras(method, path, resp.StatusCode, string(respBody)))
+			return apiErr
 		}
 		return nil
 	}
@@ -188,9 +195,27 @@ func (c *Client) roundTrip(ctx context.Context, baseURL, accountID, method, path
 
 	var apiErr APIError
 	if err := json.Unmarshal(respBody, &apiErr); err != nil || apiErr.Code == "" {
-		return HTTPErrorFromNombaBody(resp.StatusCode, respBody)
+		httpErr := HTTPErrorFromNombaBody(resp.StatusCode, respBody)
+		observability.CaptureExternalAPIError("nomba", method+" "+path, httpErr, nombaErrorExtras(method, path, resp.StatusCode, string(respBody)))
+		return httpErr
 	}
-	return NewHTTPError(resp.StatusCode, apiErr)
+	httpErr := NewHTTPError(resp.StatusCode, apiErr)
+	observability.CaptureExternalAPIError("nomba", method+" "+path, httpErr, nombaErrorExtras(method, path, resp.StatusCode, apiErr.Code))
+	return httpErr
+}
+
+func nombaErrorExtras(method, path string, status int, detail string) map[string]any {
+	extras := map[string]any{
+		"http.method": method,
+		"http.path":   path,
+	}
+	if status > 0 {
+		extras["http.status_code"] = status
+	}
+	if detail != "" {
+		extras["detail"] = detail
+	}
+	return extras
 }
 
 func doData[T any](c *Client, ctx context.Context, tenant *domain.Tenant, method, path string, body any) (T, error) {

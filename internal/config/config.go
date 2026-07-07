@@ -42,6 +42,8 @@ type Config struct {
 	CloudinaryAPIKey      string
 	CloudinaryAPISecret   string
 	CloudinaryFolder      string
+
+	SentryDSN string
 }
 
 func Load() (*Config, error) {
@@ -64,6 +66,7 @@ func Load() (*Config, error) {
 		CloudinaryAPIKey:              os.Getenv("CLOUDINARY_API_KEY"),
 		CloudinaryAPISecret:           os.Getenv("CLOUDINARY_API_SECRET"),
 		CloudinaryFolder:              getEnv("CLOUDINARY_FOLDER", "subsync/invoices"),
+		SentryDSN:                     os.Getenv("SENTRY_DSN"),
 	}
 
 	var err error

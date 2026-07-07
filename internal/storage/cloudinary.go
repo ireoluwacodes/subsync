@@ -9,6 +9,7 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/cloudinary/cloudinary-go/v2/api"
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
+	"github.com/ireoluwacodes/subsync/internal/observability"
 )
 
 type CloudinaryStrategy struct {
@@ -35,10 +36,17 @@ func (s *CloudinaryStrategy) Upload(ctx context.Context, key string, data []byte
 		ResourceType: string(api.File),
 	})
 	if err != nil {
+		observability.CaptureExternalAPIError("cloudinary", "upload", err, map[string]any{
+			"storage.key": key,
+		})
 		return "", err
 	}
 	if result.Error.Message != "" {
-		return "", fmt.Errorf("cloudinary: %s", result.Error.Message)
+		apiErr := fmt.Errorf("cloudinary: %s", result.Error.Message)
+		observability.CaptureExternalAPIError("cloudinary", "upload", apiErr, map[string]any{
+			"storage.key": key,
+		})
+		return "", apiErr
 	}
 	return result.SecureURL, nil
 }
