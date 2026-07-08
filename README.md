@@ -64,7 +64,7 @@ Use these to sign in to the dashboard (staging / demo):
 
 | Email | Password |
 |-------|----------|
-| `Utility@yopmail.com` | `SecurePassword123!` |
+| `utility@yopmail.com` | `SecurePassword123!` |
 
 ## Project layout
 
