@@ -58,6 +58,14 @@ curl http://localhost:8080/health   # liveness
 curl http://localhost:8080/ready    # readiness (postgres + redis)
 ```
 
+### Demo credentials
+
+Use these to sign in to the dashboard (staging / demo):
+
+| Email | Password |
+|-------|----------|
+| `Utility@yopmail.com` | `SecurePassword123!` |
+
 ## Project layout
 
 ```
